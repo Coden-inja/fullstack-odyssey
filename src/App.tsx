@@ -1,74 +1,61 @@
-import React, { useState } from 'react';
-import { MODULES, ModuleId } from './types';
-import { EventLoopSimulator } from './modules/EventLoopSimulator';
-import { MiddlewareOnionSimulator } from './modules/MiddlewareOnionSimulator';
-import { RestApiSimulator } from './modules/RestApiSimulator';
-import { SqlJoinsSimulator } from './modules/SqlJoinsSimulator';
-import { OrmQuerySimulator } from './modules/OrmQuerySimulator';
-import { AuthJwtSimulator } from './modules/AuthJwtSimulator';
-import { RedisQueueSimulator } from './modules/RedisQueueSimulator';
-import { RscStreamingSimulator } from './modules/RscStreamingSimulator';
-import { GitDagSimulator } from './modules/GitDagSimulator';
-import { CicdPipelineSimulator } from './modules/CicdPipelineSimulator';
+import React, { useState, useEffect } from 'react';
+import { ModuleId } from './types';
+import { LandingCatalog } from './catalog/LandingCatalog';
+import { LabLayout } from './layout/LabLayout';
+
+import { EventLoopLab } from './modules/event-loop/EventLoopLab';
+import { MiddlewareLab } from './modules/middleware/MiddlewareLab';
+import { RestApiLab } from './modules/rest-api/RestApiLab';
+import { SqlJoinsLab } from './modules/sql-joins/SqlJoinsLab';
+import { OrmQueriesLab } from './modules/orm-queries/OrmQueriesLab';
+import { AuthJwtLab } from './modules/auth-jwt/AuthJwtLab';
+import { RedisQueuesLab } from './modules/redis-queues/RedisQueuesLab';
+import { RscStreamingLab } from './modules/rsc-streaming/RscStreamingLab';
+import { GitDagLab } from './modules/git-dag/GitDagLab';
+import { CicdPipelineLab } from './modules/cicd-pipeline/CicdPipelineLab';
 
 export const App: React.FC = () => {
-  const [activeModule, setActiveModule] = useState<ModuleId>('event-loop');
+  const [selectedModule, setSelectedModule] = useState<ModuleId | null>(null);
 
-  const renderActiveModule = () => {
-    switch (activeModule) {
-      case 'event-loop': return <EventLoopSimulator />;
-      case 'middleware': return <MiddlewareOnionSimulator />;
-      case 'rest-api': return <RestApiSimulator />;
-      case 'sql-joins': return <SqlJoinsSimulator />;
-      case 'orm-queries': return <OrmQuerySimulator />;
-      case 'auth-jwt': return <AuthJwtSimulator />;
-      case 'redis-queues': return <RedisQueueSimulator />;
-      case 'rsc-streaming': return <RscStreamingSimulator />;
-      case 'git-dag': return <GitDagSimulator />;
-      case 'cicd-pipeline': return <CicdPipelineSimulator />;
-      default: return <EventLoopSimulator />;
+  // Keyboard shortcut: Press Escape to return to catalog
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedModule !== null) {
+        setSelectedModule(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedModule]);
+
+  const renderActiveLab = (id: ModuleId) => {
+    switch (id) {
+      case 'event-loop': return <EventLoopLab />;
+      case 'middleware': return <MiddlewareLab />;
+      case 'rest-api': return <RestApiLab />;
+      case 'sql-joins': return <SqlJoinsLab />;
+      case 'orm-queries': return <OrmQueriesLab />;
+      case 'auth-jwt': return <AuthJwtLab />;
+      case 'redis-queues': return <RedisQueuesLab />;
+      case 'rsc-streaming': return <RscStreamingLab />;
+      case 'git-dag': return <GitDagLab />;
+      case 'cicd-pipeline': return <CicdPipelineLab />;
+      default: return <EventLoopLab />;
     }
   };
 
+  if (!selectedModule) {
+    return <LandingCatalog onSelectModule={(id) => setSelectedModule(id)} />;
+  }
+
   return (
-    <div className="app-container">
-      <header className="header">
-        <div className="logo-group">
-          <div className="logo-badge">Ω</div>
-          <div className="logo-text">
-            <h1>Fullstack Odyssey</h1>
-            <p>Interactive Systems Learning for the True Fullstack 10</p>
-          </div>
-        </div>
-        <div className="header-badges">
-          <span className="badge active">● Live Simulation Engine</span>
-          <span className="badge">10/10 Modules Ready</span>
-        </div>
-      </header>
-
-      <div className="main-layout">
-        <aside className="sidebar">
-          {MODULES.map((m) => (
-            <button
-              key={m.id}
-              className={`module-nav-item ${activeModule === m.id ? 'active' : ''}`}
-              onClick={() => setActiveModule(m.id)}
-            >
-              <span className="nav-num">{String(m.number).padStart(2, '0')}</span>
-              <span className="nav-icon">{m.icon}</span>
-              <div className="nav-info">
-                <div className="nav-title">{m.title}</div>
-                <div className="nav-tag">{m.tag}</div>
-              </div>
-            </button>
-          ))}
-        </aside>
-
-        <main className="content-area">
-          {renderActiveModule()}
-        </main>
-      </div>
-    </div>
+    <LabLayout
+      moduleId={selectedModule}
+      onBackToHome={() => setSelectedModule(null)}
+      onSelectModule={(id) => setSelectedModule(id)}
+    >
+      {renderActiveLab(selectedModule)}
+    </LabLayout>
   );
 };
 
