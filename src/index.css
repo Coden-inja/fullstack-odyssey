@@ -808,6 +808,60 @@ body {
   flex-wrap: wrap;
 }
 
+/* Interactive-First Lab Layout: Playground on Top, Course Lesson Below */
+.lab-interactive-top-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.lab-workbench-top {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-light);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lab-lesson-bottom {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 20px;
+}
+
+@media (max-width: 960px) {
+  .lab-lesson-bottom {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lesson-objective-card {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-light);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.lesson-concepts-card {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-light);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 /* Split Lab Layout (Left Guide + Right Canvas) */
 .lab-split-container {
   display: grid;

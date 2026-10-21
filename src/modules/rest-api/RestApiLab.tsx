@@ -215,72 +215,187 @@ export const RestApiLab: React.FC = () => {
   };
 
   return (
-    <div className="lab-split-container">
-      {/* LEFT PANEL: Guided Lesson Narrative */}
-      <div className="guide-panel">
-        {/* Level Indicator Tabs */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {REST_LEVELS.map((lvl, idx) => (
-            <button
-              key={lvl.id}
-              className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => setLevelIdx(idx)}
-              style={{ borderRadius: 9999, padding: '4px 12px' }}
-            >
-              Level {lvl.id}
-            </button>
-          ))}
+    <div className="lab-interactive-top-layout">
+      {/* 1. TOP SECTION: Interactive HTTP Client Workbench & macOS Wire Terminal (Immediate, Zero-Scroll) */}
+      <div className="lab-workbench-top">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 10, borderBottom: '1px solid var(--border-light)' }}>
+          <div>
+            <div className="canvas-title" style={{ fontSize: 18, marginBottom: 2 }}>
+              HTTP Client Workbench &amp; Wire Protocol Inspector
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Configure request methods, routes, and headers. Observe real-time TCP socket frames.
+            </div>
+          </div>
+          <div>
+            {responseStatus && (
+              <span className={`badge ${responseStatus >= 200 && responseStatus < 300 ? 'badge-success' : responseStatus >= 300 && responseStatus < 400 ? 'badge-indigo' : 'badge-danger'}`} style={{ fontSize: 13, padding: '5px 12px' }}>
+                HTTP {responseStatus}
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Narrative Card */}
-        <div className="lesson-card" style={{ marginBottom: 0 }}>
-          <div className="lesson-step-header">
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        {/* Interactive URL Bar & Request Controls */}
+        <div style={{ background: '#f8fafc', border: '1.5px solid var(--border-light)', borderRadius: 12, padding: 12 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            {/* Method Selector */}
+            <select
+              value={method}
+              onChange={(e) => setMethod(e.target.value as any)}
+              className="module-switcher"
+              style={{
+                fontWeight: 800,
+                color: method === 'GET' ? '#2563eb' : method === 'POST' ? '#059669' : method === 'DELETE' ? '#dc2626' : '#7c3aed',
+                borderColor: 'var(--border-strong)',
+                background: '#ffffff',
+                padding: '8px 14px'
+              }}
+            >
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="DELETE">DELETE</option>
+              <option value="OPTIONS">OPTIONS</option>
+            </select>
+
+            {/* Path Input */}
+            <input
+              type="text"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              style={{
+                flex: 1,
+                padding: '9px 14px',
+                border: '1.5px solid var(--border-strong)',
+                borderRadius: 9999,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 13,
+                outline: 'none',
+                background: '#ffffff'
+              }}
+              placeholder="/api/users"
+            />
+
+            {/* Send Request Button */}
+            <button className="btn btn-primary btn-pill" onClick={sendRequest} style={{ gap: 6, fontWeight: 700, padding: '9px 20px' }}>
+              <Send size={13} />
+              Send Request
+            </button>
+          </div>
+
+          {/* Header Options */}
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 12, color: 'var(--text-muted)', paddingLeft: 4 }}>
+            <span style={{ fontWeight: 600 }}>Header Flags:</span>
+            <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={includeEtag}
+                onChange={(e) => setIncludeEtag(e.target.checked)}
+              />
+              Send Cached ETag (If-None-Match: "w91a-882f")
+            </label>
+          </div>
+        </div>
+
+        {/* Authentic macOS Wire Protocol Terminal */}
+        <div className="terminal-window" style={{ minHeight: 200 }}>
+          <div className="terminal-header">
+            <div className="terminal-dots">
+              <span className="dot dot-red" />
+              <span className="dot dot-yellow" />
+              <span className="dot dot-green" />
+            </div>
+            <span className="terminal-title">
+              <TerminalIcon size={12} style={{ color: '#38bdf8' }} />
+              RAW TCP SOCKET FRAMES — HTTP/1.1 WIRE
+            </span>
+            <div style={{ width: 36 }} />
+          </div>
+
+          <div className="terminal-body" style={{ maxHeight: 180, overflowY: 'auto' }}>
+            {wireLog.length === 0 ? (
+              <div style={{ color: '#71717a', fontStyle: 'italic', padding: '6px 0' }}>
+                Click "Send Request" above to stream raw TCP socket frames between browser and server...
+              </div>
+            ) : (
+              wireLog.map((line, idx) => (
+                <div key={idx} className="terminal-line" style={{ color: line.startsWith('>') ? '#38bdf8' : line.startsWith('< HTTP/1.1 2') ? '#4ade80' : line.startsWith('< HTTP/1.1 3') ? '#818cf8' : '#f4f4f5' }}>
+                  <span className="glyph" style={{ color: line.startsWith('>') ? '#38bdf8' : line.startsWith('< HTTP/1.1 2') ? '#4ade80' : '#a1a1aa' }}>
+                    {line.startsWith('>') ? '→' : line.startsWith('< HTTP') ? '✓' : '•'}
+                  </span>
+                  <span>{line}</span>
+                </div>
+              ))
+            )}
+          </div>
+
+          {responseBody && (
+            <div style={{ padding: '10px 16px', background: 'rgba(255, 255, 255, 0.04)', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <div style={{ color: '#4ade80', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+                Response Body Payload:
+              </div>
+              <pre style={{ margin: 0, color: '#f4f4f5', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{responseBody}</pre>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 2. BOTTOM SECTION: Course Syllabus & Learning Guide (Below Workbench) */}
+      <div className="lab-lesson-bottom">
+        {/* Left Card: Objective & Verification */}
+        <div className="lesson-objective-card">
+          <div>
+            {/* Level Indicator Tabs */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+              {REST_LEVELS.map((lvl, idx) => (
+                <button
+                  key={lvl.id}
+                  className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setLevelIdx(idx)}
+                  style={{ borderRadius: 9999, padding: '4px 12px' }}
+                >
+                  Level {lvl.id}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
                 {currentLevel.subtitle}
               </div>
               <h2 className="lesson-step-title">{currentLevel.title}</h2>
             </div>
-            {levelWon && <span className="badge badge-success">Passed</span>}
-          </div>
 
-          <p className="lesson-explanation">{currentLevel.story}</p>
-
-          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 10, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
-            {currentLevel.concept}
-          </div>
-
-          <div className="lesson-goal-box">
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
-              <div>{currentLevel.goalDescription}</div>
+            <div className="lesson-goal-box" style={{ marginBottom: 14 }}>
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
+                <div>{currentLevel.goalDescription}</div>
+              </div>
             </div>
-          </div>
 
-          {/* Action & Hint Controls */}
-          <div className="lesson-actions" style={{ marginBottom: 12 }}>
-            <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
-              <HelpCircle size={12} />
-              {showHint ? 'Hide Hint' : 'Need a Hint?'}
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
-              <Eye size={12} />
-              Auto-Fill Solution
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
-              <RefreshCw size={12} />
-              Reset Level
-            </button>
-          </div>
-
-          {showHint && (
-            <div style={{ marginBottom: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 8, fontSize: 13, color: '#92400e' }}>
-              <strong>Hint: </strong>{currentLevel.hint}
+            <div className="lesson-actions" style={{ marginBottom: 14 }}>
+              <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
+                <HelpCircle size={12} />
+                {showHint ? 'Hide Hint' : 'Need a Hint?'}
+              </button>
+              <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
+                <Eye size={12} />
+                Auto-Fill Solution
+              </button>
+              <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
+                <RefreshCw size={12} />
+                Reset Level
+              </button>
             </div>
-          )}
 
-          {/* Explicit Validation Check Button */}
+            {showHint && (
+              <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 8, fontSize: 13, color: '#92400e' }}>
+                <strong>Hint: </strong>{currentLevel.hint}
+              </div>
+            )}
+          </div>
+
+          {/* Validation Check Button */}
           <div style={{ paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
             <button
               className="btn btn-primary"
@@ -310,143 +425,42 @@ export const RestApiLab: React.FC = () => {
           </div>
         </div>
 
-        {/* Narrative Bridge to Next Level */}
-        {levelWon && levelIdx < REST_LEVELS.length - 1 && (
-          <div style={{ background: 'var(--bento-mint-bg)', border: '1.5px solid var(--bento-mint-border)', padding: 14, borderRadius: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--bento-mint-text)', marginBottom: 4 }}>
-              Next Up: {REST_LEVELS[levelIdx + 1].title}
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--bento-mint-text)', opacity: 0.85, marginBottom: 10 }}>
-              Now that you understand basic methods, see what happens when clients request missing resources or trigger browser security sandboxes.
-            </div>
-            <button
-              className="btn btn-success btn-sm btn-pill"
-              onClick={() => setLevelIdx(levelIdx + 1)}
-              style={{ gap: 6 }}
-            >
-              Advance to Level {levelIdx + 2}
-              <ArrowRight size={12} />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* RIGHT PANEL: Interactive HTTP Client Workbench & Wire Terminal */}
-      <div className="canvas-panel" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div className="canvas-header" style={{ marginBottom: 0, paddingBottom: 10 }}>
-          <div>
-            <div className="canvas-title">HTTP Client Workbench &amp; Wire Protocol Inspector</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              Configure request methods, route paths, headers, and observe raw TCP wire frames.
-            </div>
-          </div>
-          <div>
-            {responseStatus && (
-              <span className={`badge ${responseStatus >= 200 && responseStatus < 300 ? 'badge-success' : responseStatus >= 300 && responseStatus < 400 ? 'badge-indigo' : 'badge-danger'}`} style={{ fontSize: 12, padding: '4px 10px' }}>
-                HTTP {responseStatus}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Interactive URL Bar & Request Controls */}
-        <div style={{ background: '#f8fafc', border: '1.5px solid var(--border-light)', borderRadius: 12, padding: 14 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-            {/* Method Pill Selector */}
-            <select
-              value={method}
-              onChange={(e) => setMethod(e.target.value as any)}
-              className="module-switcher"
-              style={{
-                fontWeight: 800,
-                color: method === 'GET' ? '#2563eb' : method === 'POST' ? '#059669' : method === 'DELETE' ? '#dc2626' : '#7c3aed',
-                borderColor: 'var(--border-strong)',
-                background: '#ffffff'
-              }}
-            >
-              <option value="GET">GET</option>
-              <option value="POST">POST</option>
-              <option value="DELETE">DELETE</option>
-              <option value="OPTIONS">OPTIONS</option>
-            </select>
-
-            {/* Path Input */}
-            <input
-              type="text"
-              value={path}
-              onChange={(e) => setPath(e.target.value)}
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                border: '1.5px solid var(--border-strong)',
-                borderRadius: 9999,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 13,
-                outline: 'none',
-                background: '#ffffff'
-              }}
-              placeholder="/api/users"
-            />
-
-            {/* Send Request Button */}
-            <button className="btn btn-primary btn-pill" onClick={sendRequest} style={{ gap: 6, fontWeight: 700 }}>
-              <Send size={13} />
-              Send Request
-            </button>
+        {/* Right Card: Story Dilemma, Architectural Concept & Next Level Bridge */}
+        <div className="lesson-concepts-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b' }}>
+            System Architecture &amp; Why It Matters
           </div>
 
-          {/* Conditional Options / Headers */}
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
-            <span style={{ fontWeight: 600 }}>Header Options:</span>
-            <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input
-                type="checkbox"
-                checked={includeEtag}
-                onChange={(e) => setIncludeEtag(e.target.checked)}
-              />
-              Send Cached ETag (If-None-Match: "w91a-882f")
-            </label>
-          </div>
-        </div>
+          <p className="lesson-explanation" style={{ margin: 0 }}>
+            {currentLevel.story}
+          </p>
 
-        {/* Authentic macOS Wire Protocol Terminal */}
-        <div className="terminal-window" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 220 }}>
-          <div className="terminal-header">
-            <div className="terminal-dots">
-              <span className="dot dot-red" />
-              <span className="dot dot-yellow" />
-              <span className="dot dot-green" />
-            </div>
-            <span className="terminal-title">
-              <TerminalIcon size={12} style={{ color: '#38bdf8' }} />
-              RAW TCP SOCKET FRAMES — HTTP/1.1 WIRE
-            </span>
-            <div style={{ width: 36 }} />
+          <div style={{ background: 'var(--bg-subtle)', padding: '14px 16px', borderRadius: 12, fontSize: 13, color: 'var(--text-muted)' }}>
+            <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: 4 }}>Key Architectural Concept:</strong>
+            {currentLevel.concept}
           </div>
 
-          <div className="terminal-body" style={{ flex: 1, overflowY: 'auto', maxHeight: 200 }}>
-            {wireLog.length === 0 ? (
-              <div style={{ color: '#71717a', fontStyle: 'italic', padding: '8px 0' }}>
-                Click "Send Request" above to stream raw TCP socket frames between browser and server...
+          {/* Narrative Bridge to Next Level */}
+          {levelWon && levelIdx < REST_LEVELS.length - 1 ? (
+            <div style={{ marginTop: 'auto', background: 'var(--bento-mint-bg)', border: '1.5px solid var(--bento-mint-border)', padding: 14, borderRadius: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--bento-mint-text)', marginBottom: 2 }}>
+                Next Up: {REST_LEVELS[levelIdx + 1].title}
               </div>
-            ) : (
-              wireLog.map((line, idx) => (
-                <div key={idx} className="terminal-line" style={{ color: line.startsWith('>') ? '#38bdf8' : line.startsWith('< HTTP/1.1 2') ? '#4ade80' : line.startsWith('< HTTP/1.1 3') ? '#818cf8' : '#f4f4f5' }}>
-                  <span className="glyph" style={{ color: line.startsWith('>') ? '#38bdf8' : line.startsWith('< HTTP/1.1 2') ? '#4ade80' : '#a1a1aa' }}>
-                    {line.startsWith('>') ? '→' : line.startsWith('< HTTP') ? '✓' : '•'}
-                  </span>
-                  <span>{line}</span>
-                </div>
-              ))
-            )}
-          </div>
-
-          {responseBody && (
-            <div style={{ padding: '10px 16px', background: 'rgba(255, 255, 255, 0.04)', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-              <div style={{ color: '#4ade80', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-                Response Body Payload:
+              <div style={{ fontSize: 12, color: 'var(--bento-mint-text)', opacity: 0.85, marginBottom: 10 }}>
+                Now that you completed this level, advance to the next concept.
               </div>
-              <pre style={{ margin: 0, color: '#f4f4f5', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{responseBody}</pre>
+              <button
+                className="btn btn-success btn-sm btn-pill"
+                onClick={() => setLevelIdx(levelIdx + 1)}
+                style={{ gap: 6 }}
+              >
+                Advance to Level {levelIdx + 2}
+                <ArrowRight size={12} />
+              </button>
+            </div>
+          ) : levelWon && (
+            <div style={{ marginTop: 'auto', background: 'var(--success-light)', border: '1.5px solid var(--success-border)', padding: 14, borderRadius: 12, color: '#065f46', fontWeight: 700 }}>
+              🎉 Module Mastered! All 4 REST API levels completed.
             </div>
           )}
         </div>
