@@ -21,7 +21,6 @@ export interface ModuleMeta {
   summary: string;
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
   estTime: string;
-  icon: string;
   accentColor: string;
   keySkills: string[];
 }
@@ -30,131 +29,121 @@ export const MODULES: ModuleMeta[] = [
   {
     id: 'event-loop',
     number: '01',
-    title: 'Node.js Event Loop & libuv',
+    title: 'The Event Loop: How Node.js Runs Code',
     category: 'Runtime',
-    tagline: 'V8 Single Thread, Microtask Priority & Thread Pool IO',
-    summary: 'Master asynchronous non-blocking execution. Step line-by-line through JavaScript code and watch frames push to the Call Stack, microtasks jump the queue, and libuv threads handle heavy IO.',
+    tagline: 'JavaScript Call Stack, Microtasks & Timers',
+    summary: 'Learn how JavaScript runs asynchronous code without blocking the main thread. Step through code line-by-line to see when promises, timers, and callbacks actually execute.',
     difficulty: 'Intermediate',
     estTime: '15 mins',
-    icon: '⚡',
-    accentColor: '#6366f1',
-    keySkills: ['Call Stack', 'process.nextTick()', 'Promise Jobs', 'Timers', 'libuv C++ Pool']
+    accentColor: '#4f46e5',
+    keySkills: ['Call Stack', 'Promises & Microtasks', 'Timers (setTimeout)', 'Worker Threads']
   },
   {
     id: 'middleware',
     number: '02',
-    title: 'Express Middleware Onion',
+    title: 'Express: How Middleware Passes Requests',
     category: 'Networking',
-    tagline: 'Request Context Lifecycle & Error Handling Boundaries',
-    summary: 'Understand how HTTP requests traverse sequential handler layers. Step through next() calls, inspect mutated request contexts, and watch unhandled errors leap directly to error boundaries.',
+    tagline: 'The Request Journey, next() Functions & Error Handling',
+    summary: 'Understand how web servers process incoming requests through a chain of functions. See what happens when middleware modifies data, blocks unauthorized users, or catches errors.',
     difficulty: 'Beginner',
     estTime: '10 mins',
-    icon: '🧅',
-    accentColor: '#10b981',
-    keySkills: ['Request Context', 'next() Propagation', 'CORS & Body Parsing', 'Error Interceptors']
+    accentColor: '#059669',
+    keySkills: ['Request Flow', 'next() Function', 'Authentication Gates', 'Error Handlers']
   },
   {
     id: 'rest-api',
     number: '03',
-    title: 'REST & API Contract Sandbox',
+    title: 'REST APIs: Requests, Responses & Headers',
     category: 'Networking',
-    tagline: 'HTTP/1.1 RFC 7231 State Machine & CORS Preflights',
-    summary: 'Build and dispatch real HTTP requests like in Postman. Test status code semantics (200, 201, 204, 400, 401, 404, 429), header negotiations, idempotency rules, and CORS OPTIONS handshakes.',
+    tagline: 'HTTP Status Codes, Safe Methods & Browser Permissions (CORS)',
+    summary: 'Learn how web browsers communicate with servers. Test GET, POST, and DELETE requests, explore status codes like 200, 404, and 500, and see why browsers check permissions with CORS.',
     difficulty: 'Beginner',
     estTime: '12 mins',
-    icon: '🌐',
-    accentColor: '#06b6d4',
-    keySkills: ['RFC 7231 Status Codes', 'Idempotency', 'CORS Preflight OPTIONS', 'Header Contracts']
+    accentColor: '#0284c7',
+    keySkills: ['Status Codes (200, 404, 500)', 'Idempotency', 'CORS Permissions', 'Caching & ETags']
   },
   {
     id: 'sql-joins',
     number: '04',
-    title: 'SQL Relational Joins & Venn Diagrams',
+    title: 'SQL Joins: How Tables Connect',
     category: 'Database',
-    tagline: 'Relational Set Theory, Foreign Keys & Row Intersections',
-    summary: 'Demystify SQL joins with real data tables. Toggle INNER, LEFT, RIGHT, and FULL OUTER joins while interactive Venn diagrams visually highlight intersecting foreign key matches and NULL padding.',
+    tagline: 'Connecting Data with Inner, Left, Right & Full Joins',
+    summary: 'Learn how relational databases combine data from multiple tables. See visually what happens when users have no orders, why NULL appears, and which join to choose.',
     difficulty: 'Intermediate',
     estTime: '15 mins',
-    icon: '🗄️',
-    accentColor: '#3b82f6',
-    keySkills: ['INNER JOIN', 'LEFT / RIGHT OUTER', 'Foreign Key Mapping', 'NULL Handling', 'Cartesian Product']
+    accentColor: '#2563eb',
+    keySkills: ['INNER JOIN', 'LEFT JOIN & Missing Data', 'Foreign Keys', 'Query Planning']
   },
   {
     id: 'orm-queries',
     number: '05',
-    title: 'ORM Query Compilation & N+1 Problem',
+    title: 'Database Queries: Fixing the N+1 Performance Trap',
     category: 'Database',
-    tagline: 'Prisma/Drizzle AST Compilation & Connection Pooling',
-    summary: 'See how high-level TypeScript ORM chains compile into raw SQL. Trigger the dreaded N+1 query performance bug, monitor database connection pool exhaustion, and apply DataLoader batching fixes.',
+    tagline: 'What Happens When Loops Query the Database & How to Batch',
+    summary: 'Learn why querying the database inside a loop can slow down your entire application. Compare naive queries against batch queries to see network round-trips drop dramatically.',
     difficulty: 'Advanced',
     estTime: '18 mins',
-    icon: '🔍',
-    accentColor: '#f59e0b',
-    keySkills: ['AST Query Generation', 'N+1 Loop Detection', 'DataLoader Batching', 'Connection Pools']
+    accentColor: '#d97706',
+    keySkills: ['N+1 Query Loop', 'Network Latency', 'Batching with DataLoader', 'Connection Limits']
   },
   {
     id: 'auth-jwt',
     number: '06',
-    title: 'Auth, Sessions & JWT Rotation',
+    title: 'User Auth: Passwords, Tokens & Cookies',
     category: 'Security',
-    tagline: 'RS256 Asymmetric Cryptography & HttpOnly Cookie Shield',
-    summary: 'Inspect the 3-part anatomy of a JSON Web Token. Experience how HttpOnly SameSite cookies shield against XSS, verify asymmetric public key signatures, and execute silent refresh token rotations.',
+    tagline: 'How Secure Logins, JWT Tokens & Protected Cookies Work',
+    summary: 'Learn how web applications remember who you are after you log in. Inspect token signatures, test what happens when someone tampers with data, and see how secure cookies block attacks.',
     difficulty: 'Advanced',
     estTime: '20 mins',
-    icon: '🔐',
-    accentColor: '#ec4899',
-    keySkills: ['RS256 Signature', 'JWT Claims', 'HttpOnly Secure Cookies', 'Token Refresh Rotation', 'XSS/CSRF Defense']
+    accentColor: '#db2777',
+    keySkills: ['Token Anatomy', 'Digital Signatures', 'Tamper Detection', 'HttpOnly Cookie Defense']
   },
   {
     id: 'redis-queues',
     number: '07',
-    title: 'Redis Queues & Background Workers',
+    title: 'Background Tasks: Queues & Workers',
     category: 'Architecture',
-    tagline: 'BullMQ Distributed Streams & Dead Letter Queues',
-    summary: 'Offload blocking tasks from web threads to distributed Redis workers. Monitor job lifecycles across Waiting, Active, and Completed states, set worker concurrency, and route repeated failures to the DLQ.',
+    tagline: 'Processing Heavy Jobs in the Background with Automatic Retries',
+    summary: 'Learn how web apps send emails or process files without making users wait. Watch jobs move from waiting to active, see automatic retries on failure, and quarantine broken jobs.',
     difficulty: 'Intermediate',
     estTime: '15 mins',
-    icon: '📨',
-    accentColor: '#ef4444',
-    keySkills: ['Producer-Consumer', 'Distributed Locks', 'Concurrency Scaling', 'Exponential Backoff', 'Dead Letter Queue (DLQ)']
+    accentColor: '#dc2626',
+    keySkills: ['Job Queues', 'Worker Concurrency', 'Retry with Delay', 'Dead Letter Quarantine']
   },
   {
     id: 'rsc-streaming',
     number: '08',
-    title: 'React Server Components & Streaming SSR',
+    title: 'Fast Page Loads: Streaming HTML & Components',
     category: 'Architecture',
-    tagline: 'Server-Client Boundary, Flight Protocol & Hydration',
-    summary: 'Understand modern Next.js 15 rendering. Watch the server stream initial HTML skeletons, inspect the raw Flight wire protocol payload as database queries resolve, and see client hydration islands activate.',
+    tagline: 'Loading the Page Shell First While Slow Data Streams In',
+    summary: 'Learn how modern web apps load instantly by sending the page skeleton first, streaming data as it becomes ready, and making buttons interactive without full page reloads.',
     difficulty: 'Advanced',
     estTime: '18 mins',
-    icon: '⚛️',
-    accentColor: '#8b5cf6',
-    keySkills: ['Server Components', 'React Flight Protocol', 'Suspense Boundaries', 'Streaming SSR', 'Client Hydration Islands']
+    accentColor: '#7c3aed',
+    keySkills: ['Instant Page Shell', 'Streaming Chunk by Chunk', 'Suspense Skeletons', 'Interactive Islands']
   },
   {
     id: 'git-dag',
     number: '09',
-    title: 'Git Merkle DAG Visualizer',
-    category: 'Architecture',
-    tagline: 'Directed Acyclic Graphs, Pointer Movements & Rebasing',
-    summary: 'Inspired by LearnGitBranching. An in-memory GitEngine where you type simulated commands (commit, branch, checkout, merge) and watch SVG commit nodes, parent SHA pointers, and HEAD re-point in real-time.',
-    difficulty: 'Intermediate',
+    title: 'Visual Git: Commits, Branches & Merges',
+    category: 'DevOps',
+    tagline: 'Understanding the Save Tree, Branch Labels & Combining History',
+    summary: 'Learn Git through interactive visual puzzles. See what a commit really is, how branch pointers move, what happens when you switch branches, and how merging combines history.',
+    difficulty: 'Beginner',
     estTime: '20 mins',
-    icon: '🌿',
-    accentColor: '#10b981',
-    keySkills: ['Merkle DAG', 'Parent Pointers', 'HEAD Ref Tracking', 'Fast-Forward Merge', '3-Way Resolution']
+    accentColor: '#059669',
+    keySkills: ['Commits as Checkpoints', 'Branch Pointers', 'Switching with Checkout', 'Merging History']
   },
   {
     id: 'cicd-pipeline',
     number: '10',
-    title: 'CI/CD & Edge Deployment',
+    title: 'Automated Deployment: Pipelines & Edge Servers',
     category: 'DevOps',
-    tagline: 'GitHub Actions Parallel Matrix, Docker Caching & Edge CD',
-    summary: 'Run a production deployment pipeline. Watch GitHub Actions execute matrix checks in parallel, verify TypeScript types, leverage Docker layer caching, and distribute production assets to global edge networks.',
+    tagline: 'Testing, Building Small Container Images & Instant Global Rollouts',
+    summary: 'Learn how professional teams deploy code automatically. Watch automated tests catch bugs before they reach users, build optimized Docker containers, and switch traffic with zero downtime.',
     difficulty: 'Beginner',
     estTime: '12 mins',
-    icon: '🚀',
-    accentColor: '#06b6d4',
-    keySkills: ['GitHub Actions Workflows', 'Parallel Test Matrix', 'Docker Layer Caching', 'Shift-Left Typecheck', 'Vercel Edge Distribution']
+    accentColor: '#0284c7',
+    keySkills: ['Automated Tests & Quality Gates', 'Docker Image Optimization', 'Zero-Downtime Rollouts']
   }
 ];

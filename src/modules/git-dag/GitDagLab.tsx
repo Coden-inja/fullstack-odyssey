@@ -1,254 +1,147 @@
 import React, { useState, useEffect } from 'react';
-import { TerminalPane, LogEntry } from '../../components/TerminalPane';
 
-interface GitCommit {
+interface CommitNode {
+  id: string; // e.g. "C0", "C1", "C2"
   hash: string;
   parents: string[];
   message: string;
-  treeHash: string;
-  author: string;
-  timestamp: string;
+  lane: number; // 0 for main, 1 for feature
+  x: number;
+  y: number;
 }
 
+interface Level {
+  id: number;
+  title: string;
+  subtitle: string;
+  story: string;
+  concept: string;
+  goalDescription: string;
+  hint: string;
+  solutionCommands: string[];
+  initialCommits: CommitNode[];
+  initialBranches: Record<string, string>;
+  initialHead: { branch: string | null; commit: string };
+  checkWin: (commits: CommitNode[], branches: Record<string, string>, head: { branch: string | null; commit: string }) => boolean;
+}
+
+const LEVELS: Level[] = [
+  {
+    id: 1,
+    title: 'Level 1: Your First Commits',
+    subtitle: 'Commits as Save Points',
+    story: 'Imagine writing an essay or playing a video game without saving. If something breaks, everything is lost. In Git, a commit is a permanent snapshot or save point. Every commit points backward to the commit that came before it.',
+    concept: 'When you make a commit with `git commit`, Git takes a snapshot of your project, generates a new node, and points it to your current commit. Your branch label (`main`) automatically slides forward to the new commit.',
+    goalDescription: 'Make 2 new commits so your project history has C0, C1, and C2 on branch main.',
+    hint: 'Type "git commit" in the terminal below (or click the "+ git commit" button) twice.',
+    solutionCommands: ['git commit', 'git commit'],
+    initialCommits: [
+      { id: 'C0', hash: '8a1b2c', parents: [], message: 'Initial project setup', lane: 0, x: 80, y: 150 }
+    ],
+    initialBranches: { main: 'C0' },
+    initialHead: { branch: 'main', commit: 'C0' },
+    checkWin: (commits, branches, head) => {
+      return commits.length >= 3 && branches['main'] === commits[commits.length - 1].id;
+    }
+  },
+  {
+    id: 2,
+    title: 'Level 2: Branching Out',
+    subtitle: 'Branches are Just Movable Labels',
+    story: 'You want to build a brand new login page, but you don’t want to break the working main website while experimenting. You need an isolated workspace: a branch.',
+    concept: 'Many developers think a branch copies all your files onto your disk. It does not! A branch is literally a tiny 40-byte sticky-note label pointing to a commit hash. When you switch to a branch, `HEAD` attaches to that label.',
+    goalDescription: 'Create and switch to a branch named "feature" (using git checkout -b feature), then make 1 commit on it.',
+    hint: 'Run "git checkout -b feature" to create and switch branches, then run "git commit".',
+    solutionCommands: ['git checkout -b feature', 'git commit'],
+    initialCommits: [
+      { id: 'C0', hash: '8a1b2c', parents: [], message: 'Initial setup', lane: 0, x: 80, y: 150 },
+      { id: 'C1', hash: '4f9e21', parents: ['C0'], message: 'Add homepage', lane: 0, x: 200, y: 150 }
+    ],
+    initialBranches: { main: 'C1' },
+    initialHead: { branch: 'main', commit: 'C1' },
+    checkWin: (commits, branches, head) => {
+      return branches['feature'] !== undefined && branches['feature'] !== branches['main'] && head.branch === 'feature';
+    }
+  },
+  {
+    id: 3,
+    title: 'Level 3: Merging Two Branches',
+    subtitle: 'Bringing History Together',
+    story: 'Your new feature is tested and works perfectly! Now you need to bring that feature back into the main branch so the entire team has it.',
+    concept: 'A merge combines two lines of history. When you run `git merge feature` while on `main`, Git creates a special "Merge Commit" that has TWO parents! It connects both branches together into one unified history.',
+    goalDescription: 'Switch to the main branch (git checkout main), then merge the feature branch (git merge feature).',
+    hint: 'Type "git checkout main" then type "git merge feature".',
+    solutionCommands: ['git checkout main', 'git merge feature'],
+    initialCommits: [
+      { id: 'C0', hash: '8a1b2c', parents: [], message: 'Initial setup', lane: 0, x: 80, y: 130 },
+      { id: 'C1', hash: '4f9e21', parents: ['C0'], message: 'Add basic layout', lane: 0, x: 200, y: 130 },
+      { id: 'C2', hash: '6d3a84', parents: ['C1'], message: 'Build login page', lane: 1, x: 320, y: 220 }
+    ],
+    initialBranches: { main: 'C1', feature: 'C2' },
+    initialHead: { branch: 'feature', commit: 'C2' },
+    checkWin: (commits, branches, head) => {
+      const mergeCommit = commits.find(c => c.parents.length === 2);
+      return Boolean(mergeCommit && head.branch === 'main' && branches['main'] === mergeCommit.id);
+    }
+  },
+  {
+    id: 4,
+    title: 'Level 4: Looking at the Past (Detached HEAD)',
+    subtitle: 'Examining Old Checkpoints',
+    story: 'A bug was reported that wasn’t there yesterday. You want to travel back in time to inspect an earlier commit exactly as it was when created.',
+    concept: 'Usually, HEAD points to a branch name (HEAD -> main). But Git allows you to point HEAD directly at any commit ID. When you do `git checkout C1`, HEAD detaches from the branch label and sits directly on the commit. This is called a "Detached HEAD".',
+    goalDescription: 'Point HEAD directly at commit C1 by running: git checkout C1',
+    hint: 'Type "git checkout C1" in the terminal below.',
+    solutionCommands: ['git checkout C1'],
+    initialCommits: [
+      { id: 'C0', hash: '8a1b2c', parents: [], message: 'Initial setup', lane: 0, x: 80, y: 150 },
+      { id: 'C1', hash: '4f9e21', parents: ['C0'], message: 'Stable release v1.0', lane: 0, x: 200, y: 150 },
+      { id: 'C2', hash: '9b2c45', parents: ['C1'], message: 'Experimental redesign', lane: 0, x: 320, y: 150 }
+    ],
+    initialBranches: { main: 'C2' },
+    initialHead: { branch: 'main', commit: 'C2' },
+    checkWin: (commits, branches, head) => {
+      return head.branch === null && head.commit === 'C1';
+    }
+  }
+];
+
 export const GitDagLab: React.FC = () => {
-  // Commits in the Merkle DAG
-  const [commits, setCommits] = useState<GitCommit[]>([
-    {
-      hash: 'a1b2c3d',
-      parents: [],
-      message: 'Initial project boilerplate',
-      treeHash: 'tree_7401aa',
-      author: 'Alex <alex@odyssey.internal>',
-      timestamp: '2026-10-21 00:00:00'
-    },
-    {
-      hash: 'e4f5a6b',
-      parents: ['a1b2c3d'],
-      message: 'Add auth middleware & routes',
-      treeHash: 'tree_8812bb',
-      author: 'Alex <alex@odyssey.internal>',
-      timestamp: '2026-10-21 00:15:00'
-    }
+  const [currentLevelIdx, setCurrentLevelIdx] = useState<number>(0);
+  const level = LEVELS[currentLevelIdx];
+
+  const [commits, setCommits] = useState<CommitNode[]>(level.initialCommits);
+  const [branches, setBranches] = useState<Record<string, string>>(level.initialBranches);
+  const [head, setHead] = useState<{ branch: string | null; commit: string }>(level.initialHead);
+
+  const [inputCmd, setInputCmd] = useState<string>('');
+  const [terminalHistory, setTerminalHistory] = useState<string[]>([
+    'Welcome to Visual Git! Ready for Level ' + level.id + '.'
   ]);
+  const [showHint, setShowHint] = useState<boolean>(false);
+  const [levelWon, setLevelWon] = useState<boolean>(false);
+  const [isCompletedAll, setIsCompletedAll] = useState<boolean>(false);
 
-  // Branch pointers: branch name -> commit hash
-  const [branches, setBranches] = useState<Record<string, string>>({
-    main: 'e4f5a6b'
-  });
-
-  const [headBranch, setHeadBranch] = useState<string>('main'); // or 'DETACHED'
-  const [headCommit, setHeadCommit] = useState<string>('e4f5a6b');
-  const [selectedCommit, setSelectedCommit] = useState<GitCommit | null>(null);
-  const [commandInput, setCommandInput] = useState<string>('');
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
-
-  // Challenges
-  const [achievedBranch, setAchievedBranch] = useState<boolean>(false);
-  const [achievedDivergence, setAchievedDivergence] = useState<boolean>(false);
-  const [achievedReconcile, setAchievedReconcile] = useState<boolean>(false);
-
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { id: '1', type: 'system', text: 'Git 2.45 Merkle DAG Engine active (.git/objects/ in memory).' },
-    { id: '2', type: 'output', text: 'HEAD -> refs/heads/main at commit e4f5a6b.' }
-  ]);
-
+  // Initialize level
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('odyssey_completed_modules');
-      if (saved && JSON.parse(saved).includes('git-dag')) {
-        setIsCompleted(true);
-      }
-    } catch {}
-  }, []);
+    resetLevel(currentLevelIdx);
+  }, [currentLevelIdx]);
 
-  const generateHash = () => {
-    const chars = '0123456789abcdef';
-    let h = '';
-    for (let i = 0; i < 7; i++) h += chars[Math.floor(Math.random() * chars.length)];
-    return h;
-  };
+  // Check victory condition
+  useEffect(() => {
+    if (!levelWon && level.checkWin(commits, branches, head)) {
+      setLevelWon(true);
+      setTerminalHistory(prev => [...prev, `Level ${level.id} Complete! You achieved the target goal.`]);
 
-  const handleCommand = (raw: string) => {
-    const cmd = raw.trim();
-    if (!cmd) return;
-    const timestamp = Date.now();
-
-    // 1. git commit -m "..."
-    if (cmd.startsWith('git commit')) {
-      const match = cmd.match(/-m\s+["']?([^"']+)["']?/);
-      const msg = match ? match[1] : `Snapshot update`;
-      const newHash = generateHash();
-      const parentHash = headBranch !== 'DETACHED' ? branches[headBranch] : headCommit;
-
-      const newCommit: GitCommit = {
-        hash: newHash,
-        parents: [parentHash],
-        message: msg,
-        treeHash: `tree_${generateHash()}`,
-        author: 'Alex <alex@odyssey.internal>',
-        timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19)
-      };
-
-      setCommits(p => [...p, newCommit]);
-      setHeadCommit(newHash);
-
-      if (headBranch !== 'DETACHED') {
-        setBranches(prev => ({ ...prev, [headBranch]: newHash }));
-      }
-
-      setLogs(p => [
-        ...p,
-        { id: timestamp.toString(), type: 'system', text: `$ ${cmd}` },
-        { id: (timestamp + 1).toString(), type: 'success', text: `[${headBranch} ${newHash}] ${msg}\n 1 file changed, 14 insertions(+)` }
-      ]);
-
-      // Check divergence
-      if (Object.keys(branches).length > 1) {
-        setAchievedDivergence(true);
+      // Check if all 4 levels are done
+      if (currentLevelIdx === LEVELS.length - 1) {
+        setIsCompletedAll(true);
+        saveModuleCompletion();
       }
     }
-    // 2. git branch <name>
-    else if (cmd.startsWith('git branch') && !cmd.includes('-d')) {
-      const parts = cmd.split(' ');
-      const branchName = parts[2]?.trim();
-      if (!branchName) {
-        // list branches
-        const list = Object.keys(branches).map(b => (b === headBranch ? `* ${b}` : `  ${b}`)).join('\n');
-        setLogs(p => [
-          ...p,
-          { id: timestamp.toString(), type: 'system', text: `$ ${cmd}` },
-          { id: (timestamp + 1).toString(), type: 'output', text: list }
-        ]);
-        return;
-      }
+  }, [commits, branches, head, levelWon]);
 
-      const targetCommit = headBranch !== 'DETACHED' ? branches[headBranch] : headCommit;
-      setBranches(prev => ({ ...prev, [branchName]: targetCommit }));
-      setAchievedBranch(true);
-      setLogs(p => [
-        ...p,
-        { id: timestamp.toString(), type: 'system', text: `$ ${cmd}` },
-        { id: (timestamp + 1).toString(), type: 'success', text: `Created refs/heads/${branchName} pointing to ${targetCommit}.` }
-      ]);
-    }
-    // 3. git checkout [-b] <target> / git switch
-    else if (cmd.startsWith('git checkout') || cmd.startsWith('git switch')) {
-      const isCreate = cmd.includes('-b') || cmd.includes('-c');
-      const target = cmd.replace('git checkout', '').replace('git switch', '').replace('-b', '').replace('-c', '').trim();
-
-      if (isCreate) {
-        const currentTarget = headBranch !== 'DETACHED' ? branches[headBranch] : headCommit;
-        setBranches(prev => ({ ...prev, [target]: currentTarget }));
-        setHeadBranch(target);
-        setHeadCommit(currentTarget);
-        setAchievedBranch(true);
-        setLogs(p => [
-          ...p,
-          { id: timestamp.toString(), type: 'system', text: `$ ${cmd}` },
-          { id: (timestamp + 1).toString(), type: 'success', text: `Switched to a new branch '${target}'. HEAD -> refs/heads/${target}` }
-        ]);
-      } else {
-        if (branches[target]) {
-          setHeadBranch(target);
-          setHeadCommit(branches[target]);
-          setLogs(p => [
-            ...p,
-            { id: timestamp.toString(), type: 'system', text: `$ ${cmd}` },
-            { id: (timestamp + 1).toString(), type: 'success', text: `Switched to branch '${target}'. HEAD -> refs/heads/${target}` }
-          ]);
-        } else {
-          // Check if it's a commit hash
-          const commitObj = commits.find(c => c.hash === target);
-          if (commitObj) {
-            setHeadBranch('DETACHED');
-            setHeadCommit(commitObj.hash);
-            setLogs(p => [
-              ...p,
-              { id: timestamp.toString(), type: 'system', text: `$ ${cmd}` },
-              { id: (timestamp + 1).toString(), type: 'output', text: `Note: switching to '${target}'. You are in 'detached HEAD' state.` }
-            ]);
-          } else {
-            setLogs(p => [
-              ...p,
-              { id: timestamp.toString(), type: 'system', text: `$ ${cmd}` },
-              { id: (timestamp + 1).toString(), type: 'error', text: `error: pathspec '${target}' did not match any file(s) known to git` }
-            ]);
-          }
-        }
-      }
-    }
-    // 4. git merge <source>
-    else if (cmd.startsWith('git merge')) {
-      const sourceBranch = cmd.replace('git merge', '').trim();
-      if (!branches[sourceBranch]) {
-        setLogs(p => [
-          ...p,
-          { id: timestamp.toString(), type: 'system', text: `$ ${cmd}` },
-          { id: (timestamp + 1).toString(), type: 'error', text: `merge: ${sourceBranch} - not something we can merge` }
-        ]);
-        return;
-      }
-
-      const currentHead = branches[headBranch];
-      const sourceTarget = branches[sourceBranch];
-
-      if (currentHead === sourceTarget) {
-        setLogs(p => [
-          ...p,
-          { id: timestamp.toString(), type: 'system', text: `$ ${cmd}` },
-          { id: (timestamp + 1).toString(), type: 'output', text: `Already up to date.` }
-        ]);
-        return;
-      }
-
-      // Create 2-parent Merge Commit
-      const mergeHash = generateHash();
-      const mergeCommit: GitCommit = {
-        hash: mergeHash,
-        parents: [currentHead, sourceTarget],
-        message: `Merge branch '${sourceBranch}' into ${headBranch}`,
-        treeHash: `tree_${generateHash()}`,
-        author: 'Alex <alex@odyssey.internal>',
-        timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19)
-      };
-
-      setCommits(p => [...p, mergeCommit]);
-      setBranches(prev => ({ ...prev, [headBranch]: mergeHash }));
-      setHeadCommit(mergeHash);
-      setAchievedReconcile(true);
-
-      setLogs(p => [
-        ...p,
-        { id: timestamp.toString(), type: 'system', text: `$ ${cmd}` },
-        { id: (timestamp + 1).toString(), type: 'success', text: `Merge made by the 'ort' strategy. Created 2-parent merge commit ${mergeHash}.` }
-      ]);
-    }
-    // 5. git log --oneline
-    else if (cmd === 'git log' || cmd === 'git log --oneline') {
-      const lines = commits.slice().reverse().map(c => {
-        const branchTags = Object.entries(branches).filter(([_, h]) => h === c.hash).map(([b]) => b);
-        const isH = headCommit === c.hash ? 'HEAD -> ' : '';
-        const tagStr = branchTags.length > 0 || isH ? ` (${isH}${branchTags.join(', ')})` : '';
-        return `${c.hash}${tagStr} ${c.message}`;
-      }).join('\n');
-
-      setLogs(p => [
-        ...p,
-        { id: timestamp.toString(), type: 'system', text: `$ ${cmd}` },
-        { id: (timestamp + 1).toString(), type: 'output', text: lines }
-      ]);
-    } else {
-      setLogs(p => [
-        ...p,
-        { id: timestamp.toString(), type: 'system', text: `$ ${cmd}` },
-        { id: (timestamp + 1).toString(), type: 'error', text: `Command not recognized. Try: git commit -m "...", git branch <name>, git checkout -b <name>, git merge <name>, git log --oneline` }
-      ]);
-    }
-
-    setCommandInput('');
-  };
-
-  const markModuleCompleted = () => {
+  const saveModuleCompletion = () => {
     try {
       const saved = localStorage.getItem('odyssey_completed_modules');
       const list = saved ? JSON.parse(saved) : [];
@@ -256,222 +149,471 @@ export const GitDagLab: React.FC = () => {
         list.push('git-dag');
         localStorage.setItem('odyssey_completed_modules', JSON.stringify(list));
       }
-      setIsCompleted(true);
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'success', text: '✓ Module 09 (Git Merkle DAG Simulator) marked as Completed in local storage!' }
-      ]);
     } catch {}
   };
 
+  const resetLevel = (idx: number) => {
+    const l = LEVELS[idx];
+    setCommits(JSON.parse(JSON.stringify(l.initialCommits)));
+    setBranches(JSON.parse(JSON.stringify(l.initialBranches)));
+    setHead(JSON.parse(JSON.stringify(l.initialHead)));
+    setLevelWon(false);
+    setShowHint(false);
+    setInputCmd('');
+    setTerminalHistory([`Loaded ${l.title}. Objective: ${l.goalDescription}`]);
+  };
+
+  const executeCommand = (raw: string) => {
+    const cmd = raw.trim();
+    if (!cmd) return;
+
+    setTerminalHistory(prev => [...prev, `$ ${cmd}`]);
+
+    // Command: git commit
+    if (cmd.startsWith('git commit')) {
+      const nextNum = commits.length;
+      const nextId = `C${nextNum}`;
+      const nextHash = Math.random().toString(16).substring(2, 8);
+      const parentId = head.commit;
+      const parentNode = commits.find(c => c.id === parentId) || commits[commits.length - 1];
+
+      // Lane calculation: if head is on a feature branch, put in lane 1
+      const isFeature = head.branch && head.branch !== 'main';
+      const lane = isFeature ? 1 : 0;
+      const x = parentNode ? parentNode.x + 120 : 100;
+      const y = lane === 0 ? 130 : 220;
+
+      const newCommit: CommitNode = {
+        id: nextId,
+        hash: nextHash,
+        parents: [parentId],
+        message: `Commit ${nextId}`,
+        lane,
+        x,
+        y
+      };
+
+      setCommits(prev => [...prev, newCommit]);
+      setHead(prev => ({ ...prev, commit: nextId }));
+
+      if (head.branch) {
+        setBranches(prev => ({ ...prev, [head.branch!]: nextId }));
+        setTerminalHistory(prev => [...prev, `Created ${nextId} (${nextHash}). ${head.branch} -> ${nextId}`]);
+      } else {
+        setTerminalHistory(prev => [...prev, `Created ${nextId} in detached HEAD state.`]);
+      }
+      return;
+    }
+
+    // Command: git checkout -b <name> or git branch <name>
+    if (cmd.startsWith('git checkout -b ') || cmd.startsWith('git branch ')) {
+      const isSwitch = cmd.startsWith('git checkout -b ');
+      const branchName = cmd.replace(isSwitch ? 'git checkout -b ' : 'git branch ', '').trim();
+      if (!branchName) {
+        setTerminalHistory(prev => [...prev, 'Error: missing branch name']);
+        return;
+      }
+
+      setBranches(prev => ({ ...prev, [branchName]: head.commit }));
+      if (isSwitch) {
+        setHead({ branch: branchName, commit: head.commit });
+        setTerminalHistory(prev => [...prev, `Switched to a new branch '${branchName}' at ${head.commit}`]);
+      } else {
+        setTerminalHistory(prev => [...prev, `Created branch '${branchName}' pointing to ${head.commit}`]);
+      }
+      return;
+    }
+
+    // Command: git checkout <name or id>
+    if (cmd.startsWith('git checkout ')) {
+      const target = cmd.replace('git checkout ', '').trim();
+      if (branches[target]) {
+        // Switching to branch
+        setHead({ branch: target, commit: branches[target] });
+        setTerminalHistory(prev => [...prev, `Switched to branch '${target}'`]);
+      } else if (commits.some(c => c.id === target)) {
+        // Checking out specific commit -> Detached HEAD
+        setHead({ branch: null, commit: target });
+        setTerminalHistory(prev => [
+          ...prev,
+          `Note: switching to '${target}'. You are in 'detached HEAD' state.`
+        ]);
+      } else {
+        setTerminalHistory(prev => [...prev, `Error: pathspec '${target}' did not match any file(s) or branch known to git`]);
+      }
+      return;
+    }
+
+    // Command: git merge <branch>
+    if (cmd.startsWith('git merge ')) {
+      const targetBranch = cmd.replace('git merge ', '').trim();
+      const targetCommitId = branches[targetBranch];
+      if (!targetCommitId) {
+        setTerminalHistory(prev => [...prev, `merge: ${targetBranch} - not something we can merge`]);
+        return;
+      }
+
+      if (targetCommitId === head.commit) {
+        setTerminalHistory(prev => [...prev, 'Already up to date.']);
+        return;
+      }
+
+      const nextNum = commits.length;
+      const nextId = `C${nextNum}`;
+      const nextHash = Math.random().toString(16).substring(2, 8);
+      const parent1 = head.commit;
+      const parent2 = targetCommitId;
+
+      const p1Node = commits.find(c => c.id === parent1)!;
+      const p2Node = commits.find(c => c.id === parent2)!;
+      const maxX = Math.max(p1Node.x, p2Node.x) + 120;
+
+      const mergeCommit: CommitNode = {
+        id: nextId,
+        hash: nextHash,
+        parents: [parent1, parent2],
+        message: `Merge branch '${targetBranch}'`,
+        lane: 0,
+        x: maxX,
+        y: 130
+      };
+
+      setCommits(prev => [...prev, mergeCommit]);
+      setHead(prev => ({ ...prev, commit: nextId }));
+      if (head.branch) {
+        setBranches(prev => ({ ...prev, [head.branch!]: nextId }));
+      }
+      setTerminalHistory(prev => [...prev, `Merge made by the 'ort' strategy: ${nextId} (${nextHash})`]);
+      return;
+    }
+
+    setTerminalHistory(prev => [...prev, `Unknown command: ${cmd}. Available: git commit, git checkout, git branch, git merge`]);
+  };
+
+  const handleAutoPlaySolution = () => {
+    level.solutionCommands.forEach((cmd, idx) => {
+      setTimeout(() => {
+        executeCommand(cmd);
+      }, idx * 600);
+    });
+  };
+
   return (
-    <>
-      <div className="lab-panel-left">
-        {/* Story Quest */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>Quest: The Merkle Tree & Branch Pointer Invariant</span>
-            <span className="badge badge-indigo">Module 09</span>
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            Git is not a delta difference tracker; it is an immutable content-addressed <strong>Merkle Directed Acyclic Graph (DAG)</strong>.
-          </p>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, marginTop: 8 }}>
-            <strong>Pointer Truth:</strong> Branches are merely 41-byte plain-text files pointing to a commit hash.
-            <code> HEAD</code> is a pointer to the active branch ref (or directly to a commit in detached HEAD mode).
-          </p>
+    <div className="lab-split-container">
+      {/* LEFT PANEL: Guided Lesson & Interactive Terminal */}
+      <div className="guide-panel">
+        {/* Level Navigation Tabs */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {LEVELS.map((l, idx) => (
+            <button
+              key={l.id}
+              className={`btn btn-sm ${currentLevelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setCurrentLevelIdx(idx)}
+            >
+              Level {l.id}
+            </button>
+          ))}
         </div>
 
-        {/* Interactive Git Shell */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>LearnGitBranching Interactive Shell</span>
-            <span className="badge badge-emerald">
-              HEAD → {headBranch === 'DETACHED' ? headCommit : `refs/heads/${headBranch}`}
-            </span>
+        {/* Lesson Story Card */}
+        <div className="lesson-card" style={{ marginBottom: 0 }}>
+          <div className="lesson-step-header">
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+                {level.subtitle}
+              </div>
+              <h2 className="lesson-step-title">{level.title}</h2>
+            </div>
+            {levelWon && <span className="badge badge-success">Passed</span>}
           </div>
 
-          <form onSubmit={(e) => { e.preventDefault(); handleCommand(commandInput); }} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <p className="lesson-explanation">{level.story}</p>
+
+          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
+            {level.concept}
+          </div>
+
+          {/* Goal Objective Box */}
+          <div className="lesson-goal-box">
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
+              <div>{level.goalDescription}</div>
+            </div>
+          </div>
+
+          {/* Actions: Hint & Solution */}
+          <div className="lesson-actions">
+            <button 
+              className="btn btn-outline btn-sm" 
+              onClick={() => setShowHint(!showHint)}
+            >
+              {showHint ? 'Hide Hint' : 'Need a Hint?'}
+            </button>
+            <button 
+              className="btn btn-outline btn-sm"
+              onClick={handleAutoPlaySolution}
+              title="Watch the solution step-by-step"
+            >
+              Show Solution
+            </button>
+            <button 
+              className="btn btn-outline btn-sm" 
+              onClick={() => resetLevel(currentLevelIdx)}
+            >
+              Reset Level
+            </button>
+          </div>
+
+          {showHint && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
+              <strong>Hint: </strong>{level.hint}
+            </div>
+          )}
+        </div>
+
+        {/* Victory Celebration Banner */}
+        {levelWon && (
+          <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: 14, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontWeight: 700, color: 'var(--success)' }}>Level Completed!</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Great work! Ready for the next challenge?</div>
+            </div>
+            {currentLevelIdx < LEVELS.length - 1 ? (
+              <button 
+                className="btn btn-success btn-sm"
+                onClick={() => setCurrentLevelIdx(currentLevelIdx + 1)}
+              >
+                Next Level →
+              </button>
+            ) : (
+              <span className="badge badge-success">All Levels Mastered!</span>
+            )}
+          </div>
+        )}
+
+        {/* Quick Helper Action Buttons */}
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+            Quick Commands:
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button className="btn btn-outline btn-sm" onClick={() => executeCommand('git commit')}>
+              + git commit
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => executeCommand('git checkout -b feature')}>
+              git checkout -b feature
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => executeCommand('git checkout main')}>
+              git checkout main
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => executeCommand('git merge feature')}>
+              git merge feature
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => executeCommand('git checkout C1')}>
+              git checkout C1
+            </button>
+          </div>
+        </div>
+
+        {/* Interactive CLI Terminal */}
+        <div className="sim-terminal" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, overflowY: 'auto', maxHeight: 180, display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+            {terminalHistory.map((item, idx) => (
+              <div key={idx} style={{ color: item.startsWith('$') ? '#38bdf8' : item.startsWith('Level') ? '#34d399' : '#e2e8f0' }}>
+                {item}
+              </div>
+            ))}
+          </div>
+
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              executeCommand(inputCmd);
+              setInputCmd('');
+            }}
+            className="sim-terminal-row"
+          >
+            <span className="sim-terminal-prompt">$</span>
             <input
               type="text"
-              value={commandInput}
-              onChange={(e) => setCommandInput(e.target.value)}
-              placeholder="e.g. git commit -m 'new feature'"
-              style={{
-                flex: 1,
-                padding: '8px 12px',
-                background: '#040711',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 6,
-                color: '#fff',
-                fontFamily: 'var(--font-mono)',
-                fontSize: 12
-              }}
+              className="sim-terminal-input"
+              value={inputCmd}
+              onChange={(e) => setInputCmd(e.target.value)}
+              placeholder="e.g. git commit"
             />
-            <button type="submit" className="btn btn-primary" style={{ fontSize: 12 }}>
+            <button type="submit" className="btn btn-primary btn-sm">
               Run
             </button>
           </form>
-
-          {/* Quick Action Shortcuts */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={() => handleCommand('git commit -m "Implement feature logic"')}>
-              + git commit
-            </button>
-            <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={() => handleCommand('git checkout -b feature-payment')}>
-              git checkout -b feature-payment
-            </button>
-            <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={() => handleCommand('git checkout main')}>
-              git checkout main
-            </button>
-            <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={() => handleCommand('git merge feature-payment')}>
-              git merge feature-payment
-            </button>
-            <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={() => handleCommand('git log --oneline')}>
-              git log --oneline
-            </button>
-          </div>
         </div>
+      </div>
 
-        {/* Challenge Mastery Card */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>Git DAG Engineering Checklist</span>
-            <span className={`badge ${isCompleted ? 'badge-emerald' : 'badge-indigo'}`}>
-              {isCompleted ? '✓ Completed' : 'In Progress'}
+      {/* RIGHT PANEL: Live Interactive Graph Canvas */}
+      <div className="canvas-panel">
+        <div className="canvas-header">
+          <div>
+            <div className="canvas-title">Git History Graph</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Circles represent commit checkpoints. Arrows link commits to their parents.
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span className="badge badge-indigo">
+              HEAD: {head.branch ? `refs/heads/${head.branch}` : `Detached at ${head.commit}`}
+            </span>
+            <span className="badge">
+              Total Commits: {commits.length}
             </span>
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedBranch ? '✅' : '⏳'}</span>
-              <span>Create an isolated feature branch (refs/heads/feature-*)</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedDivergence ? '✅' : '⏳'}</span>
-              <span>Commit on multiple branches to produce a divergent Merkle DAG</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedReconcile ? '✅' : '⏳'}</span>
-              <span>Reconcile divergent branches via a 2-parent merge commit</span>
-            </div>
-          </div>
-
-          <button
-            className={`btn ${isCompleted ? 'btn-success' : achievedBranch && achievedDivergence ? 'btn-primary' : 'btn-secondary'}`}
-            disabled={!achievedBranch}
-            onClick={markModuleCompleted}
-            style={{ width: '100%', justifyContent: 'center' }}
-          >
-            {isCompleted ? '✓ Module 09 Mastered (Completed)' : 'Mark Module as Done →'}
-          </button>
         </div>
 
-        <TerminalPane logs={logs} title="POSIX Git Terminal Traces" />
-      </div>
+        {/* Interactive SVG Tree Visualizer */}
+        <div style={{ flex: 1, border: '1px solid var(--border-light)', borderRadius: 8, background: '#fafbfc', position: 'relative', overflow: 'auto' }}>
+          <svg width="100%" height="100%" viewBox="0 0 760 380" style={{ minWidth: 640, minHeight: 320 }}>
+            <defs>
+              <marker
+                id="git-arrow"
+                viewBox="0 0 10 10"
+                refX="26"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 1 L 10 5 L 0 9 z" fill="#94a3b8" />
+              </marker>
+            </defs>
 
-      {/* Right Column: Visual Merkle DAG Canvas & Object Inspector */}
-      <div className="lab-panel-right">
-        <div className="canvas-card">
-          <div className="lab-card-title">
-            <span>Commit Tree Directed Acyclic Graph (DAG)</span>
-            <span className="badge badge-emerald">Total Objects: {commits.length} Commits</span>
-          </div>
+            {/* Connecting Parent Arrows */}
+            {commits.map(commit => {
+              return commit.parents.map(parentId => {
+                const parentNode = commits.find(c => c.id === parentId);
+                if (!parentNode) return null;
 
-          {/* Visual DAG Horizontal Stream */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            overflowX: 'auto',
-            padding: '24px 10px',
-            marginBottom: 20
-          }}>
-            {commits.map((c) => {
-              const branchPointers = Object.entries(branches).filter(([_, h]) => h === c.hash).map(([b]) => b);
-              const isHeadTarget = headCommit === c.hash;
-              const isSelected = selectedCommit?.hash === c.hash;
+                // Bezier curve connecting child to parent
+                const d = `M ${commit.x} ${commit.y} C ${(commit.x + parentNode.x) / 2} ${commit.y}, ${(commit.x + parentNode.x) / 2} ${parentNode.y}, ${parentNode.x} ${parentNode.y}`;
+
+                return (
+                  <path
+                    key={`${commit.id}->${parentId}`}
+                    d={d}
+                    fill="none"
+                    stroke="#94a3b8"
+                    strokeWidth="3"
+                    markerEnd="url(#git-arrow)"
+                  />
+                );
+              });
+            })}
+
+            {/* Commit Circles & Labels */}
+            {commits.map(commit => {
+              const isHeadCommit = head.commit === commit.id;
+              const attachedBranches = Object.entries(branches).filter(([_, cid]) => cid === commit.id);
 
               return (
-                <div
-                  key={c.hash}
-                  onClick={() => setSelectedCommit(c)}
-                  style={{
-                    minWidth: 130,
-                    padding: '12px 14px',
-                    borderRadius: 10,
-                    background: isSelected ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255, 255, 255, 0.03)',
-                    border: `2px solid ${isSelected ? 'var(--indigo)' : isHeadTarget ? 'var(--emerald)' : 'var(--border-subtle)'}`,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    position: 'relative'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: '#fff' }}>
-                      {c.hash}
-                    </span>
-                    {c.parents.length > 1 && (
-                      <span className="badge badge-purple" style={{ fontSize: 9 }}>Merge</span>
-                    )}
-                  </div>
+                <g key={commit.id} style={{ transition: 'all 0.3s ease' }}>
+                  {/* Outer ring if current HEAD */}
+                  {isHeadCommit && (
+                    <circle
+                      cx={commit.x}
+                      cy={commit.y}
+                      r={30}
+                      fill="none"
+                      stroke="var(--primary)"
+                      strokeWidth="2"
+                      strokeDasharray="4 2"
+                    />
+                  )}
 
-                  <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: '6px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {c.message}
-                  </p>
+                  {/* Main Commit Circle */}
+                  <circle
+                    cx={commit.x}
+                    cy={commit.y}
+                    r={22}
+                    fill={commit.parents.length === 2 ? '#4f46e5' : commit.lane === 1 ? '#059669' : '#2563eb'}
+                    stroke="#ffffff"
+                    strokeWidth="3"
+                    style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }}
+                  />
 
-                  {/* Branch Pointers */}
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
-                    {branchPointers.map(b => (
-                      <span key={b} className="badge badge-indigo" style={{ fontSize: 9 }}>
-                        {b}
-                      </span>
-                    ))}
-                    {isHeadTarget && (
-                      <span className="badge badge-emerald" style={{ fontSize: 9 }}>
-                        ● HEAD
-                      </span>
-                    )}
-                  </div>
-                </div>
+                  {/* Commit ID Label */}
+                  <text
+                    x={commit.x}
+                    y={commit.y + 5}
+                    textAnchor="middle"
+                    fill="#ffffff"
+                    fontSize="12"
+                    fontWeight="bold"
+                    fontFamily="var(--font-mono)"
+                  >
+                    {commit.id}
+                  </text>
+
+                  {/* Hash & Message below */}
+                  <text
+                    x={commit.x}
+                    y={commit.y + 40}
+                    textAnchor="middle"
+                    fill="var(--text-muted)"
+                    fontSize="11"
+                    fontFamily="var(--font-mono)"
+                  >
+                    {commit.hash}
+                  </text>
+
+                  {/* Branch Labels floating above commit */}
+                  {attachedBranches.map(([bName], bIdx) => (
+                    <g key={bName} transform={`translate(${commit.x - 30}, ${commit.y - 40 - bIdx * 24})`}>
+                      <rect
+                        width={60}
+                        height={20}
+                        rx={4}
+                        fill={bName === 'main' ? '#dbeafe' : '#d1fae5'}
+                        stroke={bName === 'main' ? '#93c5fd' : '#a7f3d0'}
+                      />
+                      <text
+                        x={30}
+                        y={14}
+                        textAnchor="middle"
+                        fill={bName === 'main' ? '#1e40af' : '#065f46'}
+                        fontSize="11"
+                        fontWeight="600"
+                      >
+                        {bName}
+                      </text>
+                    </g>
+                  ))}
+
+                  {/* HEAD indicator badge */}
+                  {isHeadCommit && (
+                    <g transform={`translate(${commit.x - 24}, ${commit.y - 40 - attachedBranches.length * 24})`}>
+                      <rect
+                        width={48}
+                        height={18}
+                        rx={4}
+                        fill="#fef3c7"
+                        stroke="#fde68a"
+                      />
+                      <text
+                        x={24}
+                        y={13}
+                        textAnchor="middle"
+                        fill="#92400e"
+                        fontSize="10"
+                        fontWeight="700"
+                      >
+                        * HEAD
+                      </text>
+                    </g>
+                  )}
+                </g>
               );
             })}
-          </div>
-
-          {/* Git Object Inspector (Selected Commit internal bytes) */}
-          <div className="lab-card" style={{ background: '#040711' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <strong style={{ fontSize: 13, color: 'var(--indigo)' }}>
-                {selectedCommit ? `Raw Git Object: .git/objects/${selectedCommit.hash.slice(0, 2)}/${selectedCommit.hash.slice(2)}` : 'Git Object Inspector (Click any commit node)'}
-              </strong>
-              <span className="badge">Zlib Decompressed</span>
-            </div>
-
-            {selectedCommit ? (
-              <pre style={{
-                background: 'rgba(0,0,0,0.5)',
-                padding: '12px 14px',
-                borderRadius: 6,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                color: 'var(--cyan)',
-                lineHeight: 1.6
-              }}>
-{`tree ${selectedCommit.treeHash}
-${selectedCommit.parents.map(p => `parent ${p}`).join('\n')}
-author ${selectedCommit.author} ${selectedCommit.timestamp}
-committer ${selectedCommit.author} ${selectedCommit.timestamp}
-
-${selectedCommit.message}`}
-              </pre>
-            ) : (
-              <p style={{ color: 'var(--text-dim)', fontSize: 12 }}>
-                Click any commit card above to decompress its SHA hash and inspect tree pointers, parents, and author signatures.
-              </p>
-            )}
-          </div>
+          </svg>
         </div>
       </div>
-    </>
+    </div>
   );
 };

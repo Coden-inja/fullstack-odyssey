@@ -31,23 +31,22 @@ export const LandingCatalog: React.FC<LandingCatalogProps> = ({ onSelectModule }
       {/* Hero Header */}
       <section className="catalog-hero">
         <div className="hero-pill">
-          <span>⚡</span>
-          <span>The True Fullstack 10 Curriculum</span>
+          Interactive Fullstack Learning Curriculum
         </div>
-        <h1 className="hero-title">Learn the Systems Under the Wire.</h1>
+        <h1 className="hero-title">Visual Systems Learning</h1>
         <p className="hero-subtitle">
-          Interactive, full-screen visual labs designed for engineers. Step through in-memory state models 
-          from the libuv event loop to SQL relational algebra and Git Merkle DAGs.
+          Step-by-step interactive labs that show you what actually happens under the hood. 
+          Learn how servers, databases, browsers, and deployment pipelines work through guided levels.
         </p>
 
         {/* Global Progress Bar */}
-        <div style={{ maxWidth: 460, margin: '20px auto 28px', background: 'rgba(255, 255, 255, 0.03)', padding: '12px 18px', borderRadius: 12, border: '1px solid var(--border-subtle)' }}>
+        <div style={{ maxWidth: 440, margin: '20px auto 28px', background: 'var(--bg-surface)', padding: '16px 20px', borderRadius: 10, border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-sm)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
-            <span>Curriculum Mastery</span>
-            <span style={{ color: 'var(--emerald)', fontWeight: 600 }}>{completedModules.length} / {MODULES.length} Completed ({progressPercent}%)</span>
+            <span style={{ fontWeight: 600 }}>Your Learning Progress</span>
+            <span style={{ color: 'var(--success)', fontWeight: 700 }}>{completedModules.length} of {MODULES.length} Completed ({progressPercent}%)</span>
           </div>
-          <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{ width: `${progressPercent}%`, height: '100%', background: 'linear-gradient(90deg, var(--indigo), var(--emerald))', transition: 'width 0.4s ease' }} />
+          <div style={{ width: '100%', height: 8, background: 'var(--bg-subtle)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ width: `${progressPercent}%`, height: '100%', background: 'var(--primary)', transition: 'width 0.4s ease' }} />
           </div>
         </div>
 
@@ -74,17 +73,15 @@ export const LandingCatalog: React.FC<LandingCatalogProps> = ({ onSelectModule }
               key={m.id} 
               className={`catalog-card ${isDone ? 'completed-card' : ''}`}
               onClick={() => onSelectModule(m.id)}
-              style={isDone ? { borderColor: 'rgba(16, 185, 129, 0.4)' } : undefined}
             >
               <div className="card-top">
-                <span className="card-number">{m.number}</span>
+                <span className="card-number">Module {m.number}</span>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  {isDone && <span className="badge badge-emerald">✓ Completed</span>}
+                  {isDone && <span className="badge badge-success">Completed</span>}
                   <span className="badge badge-indigo">{m.category}</span>
                 </div>
               </div>
 
-              <div className="card-icon">{m.icon}</div>
               <h2 className="card-title">{m.title}</h2>
               <div className="card-tagline">{m.tagline}</div>
               <p className="card-summary">{m.summary}</p>
@@ -104,7 +101,7 @@ export const LandingCatalog: React.FC<LandingCatalogProps> = ({ onSelectModule }
                     onSelectModule(m.id);
                   }}
                 >
-                  {isDone ? 'Review Lab →' : 'Enter Lab →'}
+                  {isDone ? 'Review Lab' : 'Start Lab'}
                 </button>
               </div>
             </div>

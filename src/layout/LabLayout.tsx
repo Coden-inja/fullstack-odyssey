@@ -22,12 +22,11 @@ export const LabLayout: React.FC<LabLayoutProps> = ({
       <header className="lab-topbar">
         <div className="topbar-left">
           <button className="back-btn" onClick={onBackToHome} title="Return to catalog [Esc]">
-            <span>←</span>
-            <span>All Labs</span>
+            ← All Labs
           </button>
-          <div style={{ width: 1, height: 20, background: 'var(--border-subtle)' }} />
+          <div style={{ width: 1, height: 20, background: 'var(--border-light)' }} />
           <div className="topbar-title">
-            <span>{currentMeta.icon}</span>
+            <span style={{ color: 'var(--text-dim)', fontFamily: 'var(--font-mono)' }}>{currentMeta.number}</span>
             <span>{currentMeta.title}</span>
             <span className="badge badge-indigo" style={{ marginLeft: 6 }}>{currentMeta.category}</span>
             <span className="badge">{currentMeta.difficulty}</span>
@@ -49,7 +48,7 @@ export const LabLayout: React.FC<LabLayoutProps> = ({
           </select>
 
           <button className="btn btn-secondary" onClick={onBackToHome}>
-            Exit Lab ✕
+            Exit Lab
           </button>
         </div>
       </header>
