@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Terminal as TerminalIcon } from 'lucide-react';
+import { Terminal as TerminalIcon, Send, RefreshCw, CheckCircle2, ArrowRight, HelpCircle, Eye } from 'lucide-react';
 
 interface RestApiLevel {
   id: number;
@@ -23,81 +23,180 @@ const REST_LEVELS: RestApiLevel[] = [
     story: 'When you open a profile, your browser fetches data. When you sign up, your browser creates data. HTTP uses different methods to signal the server what you want to do.',
     concept: 'GET requests fetch existing data and should never modify server state. The server responds with HTTP 200 OK. POST requests submit a body payload to create a new resource. The server responds with HTTP 201 Created.',
     goalDescription: 'Select POST method, click "Send HTTP Request", and observe the server respond with HTTP 201 Created.',
-    hint: 'Switch the method dropdown from GET to POST and click "Send HTTP Request".',
+    hint: 'Switch the method dropdown from GET to POST, then click Send.',
     method: 'POST',
     path: '/api/users',
     targetStatus: 201
   },
   {
     id: 2,
-    title: 'Level 2: Safe & Idempotent Actions',
-    subtitle: 'Why DELETE Won’t Duplicate Work',
-    story: 'If a payment or delete button glitches and fires 3 times in a row, what happens? That depends on whether the HTTP method is idempotent.',
-    concept: 'An operation is "Idempotent" if running it once or running it 100 times produces the exact same final result. DELETE is idempotent: deleting user #42 once removes them; deleting user #42 again still leaves them removed. POST is NOT idempotent.',
-    goalDescription: 'Send a DELETE request to /api/users/42 and watch the server return 204 No Content.',
-    hint: 'Select DELETE method and click "Send HTTP Request".',
+    title: 'Level 2: Safe Deletion & Missing Resources',
+    subtitle: 'DELETE (200 OK) & 404 Not Found',
+    story: 'Deleting a user account requires explicit intent. If a client attempts to delete an account ID that does not exist in the database, the server must reject it cleanly.',
+    concept: 'DELETE removes an existing entity. If the record exists, the server returns 200 OK (or 204 No Content). If the ID does not exist, the server returns 404 Not Found.',
+    goalDescription: 'Send a DELETE request to /api/users/999 to observe a 404 Not Found rejection, then switch path to /api/users/42 and send DELETE to successfully delete it (200 OK).',
+    hint: 'First set method to DELETE and path to /api/users/999 (fails with 404). Then change path to /api/users/42 and send again.',
     method: 'DELETE',
     path: '/api/users/42',
-    targetStatus: 204
+    targetStatus: 200
   },
   {
     id: 3,
-    title: 'Level 3: Browser Permissions (CORS)',
-    subtitle: 'The Invisible Preflight OPTIONS Request',
-    story: 'Why does your browser sometimes send a request you never wrote? If your frontend app lives on a different domain than your API, the browser steps in to protect users.',
-    concept: 'Cross-Origin Resource Sharing (CORS): when a website on `frontend.io` tries to send custom headers to `api.service.com`, the browser automatically sends an HTTP OPTIONS preflight request first to ask permission.',
-    goalDescription: 'Switch the Origin to "https://untrusted-site.com" and click "Send HTTP Request" to see the preflight OPTIONS handshake succeed.',
-    hint: 'Ensure Origin is set to cross-origin and dispatch the request.',
+    title: 'Level 3: CORS Preflight Handshake',
+    subtitle: 'Cross-Origin Resource Sharing & OPTIONS',
+    story: 'When a web app running on localhost:3000 calls an API on api.acme.com, the browser security sandbox pauses the request. It fires an automated "Preflight" check first.',
+    concept: 'The browser automatically issues an OPTIONS request with Origin and Access-Control-Request-Method headers before sending complex cross-domain requests. If the server does not reply with Access-Control-Allow-Origin, the browser blocks the response.',
+    goalDescription: 'Switch method to OPTIONS and path to /api/users to inspect the preflight handshake headers returned by the server.',
+    hint: 'Select OPTIONS method and click Send Request.',
     method: 'OPTIONS',
     path: '/api/users',
     targetStatus: 204
   },
   {
     id: 4,
-    title: 'Level 4: Saving Bandwidth with ETags',
-    subtitle: 'HTTP 304 Not Modified',
-    story: 'Why re-download a large list of products or user settings if not a single byte has changed since your last visit?',
-    concept: 'The server provides an ETag (fingerprint of data). When you request again with `If-None-Match: "w91a"`, the server compares the fingerprint. If identical, it returns 304 Not Modified with ZERO response body bytes!',
-    goalDescription: 'Toggle "Send Cached ETag: true", send a GET request, and observe HTTP 304 with 0 bytes transferred.',
-    hint: 'Enable the "If-None-Match" header checkbox and click "Send HTTP Request".',
+    title: 'Level 4: HTTP Caching & 304 Not Modified',
+    subtitle: 'Conditional Requests with ETags',
+    story: 'Downloading megabytes of JSON repeatedly wastes bandwidth and CPU. HTTP ETags assign a cryptographic fingerprint to resources so servers can tell browsers: "Nothing changed, keep using your cache!"',
+    concept: 'When a client sends `If-None-Match: "w91a-882f"`, the server compares the hash with current data. If identical, the server sends a tiny `304 Not Modified` frame with 0 bytes body.',
+    goalDescription: 'Send a GET to /api/users with the ETag header checked to receive a 304 Not Modified status without downloading redundant bytes.',
+    hint: 'Select GET method, ensure the ETag checkbox is checked, and send request.',
     method: 'GET',
-    path: '/api/products',
+    path: '/api/users',
     targetStatus: 304
   }
 ];
 
 export const RestApiLab: React.FC = () => {
-  const [levelIdx, setLevelIdx] = useState<number>(0);
-  const currentLevel = REST_LEVELS[levelIdx];
-
-  const [method, setMethod] = useState<'GET' | 'POST' | 'DELETE' | 'OPTIONS'>(currentLevel.method);
-  const [path, setPath] = useState<string>(currentLevel.path);
-  const [origin, setOrigin] = useState<string>('https://app.example.com');
-  const [includeEtag, setIncludeEtag] = useState<boolean>(false);
-
+  const [levelIdx, setLevelIdx] = useState(0);
+  const [method, setMethod] = useState<'GET' | 'POST' | 'DELETE' | 'OPTIONS'>('GET');
+  const [path, setPath] = useState('/api/users');
+  const [includeEtag, setIncludeEtag] = useState(false);
   const [responseStatus, setResponseStatus] = useState<number | null>(null);
-  const [responseHeaders, setResponseHeaders] = useState<Record<string, string>>({});
   const [responseBody, setResponseBody] = useState<string | null>(null);
   const [wireLog, setWireLog] = useState<string[]>([]);
+  const [showHint, setShowHint] = useState(false);
+  const [levelWon, setLevelWon] = useState(false);
+  const [validationMsg, setValidationMsg] = useState<{ passed: boolean; message: string } | null>(null);
 
-  const [showHint, setShowHint] = useState<boolean>(false);
-  const [levelWon, setLevelWon] = useState<boolean>(false);
+  const currentLevel = REST_LEVELS[levelIdx];
 
   useEffect(() => {
     resetLevel(levelIdx);
   }, [levelIdx]);
 
-  useEffect(() => {
-    if (!levelWon && responseStatus === currentLevel.targetStatus) {
-      setLevelWon(true);
-      saveModuleCompletion();
-    }
-  }, [responseStatus, levelWon, currentLevel]);
+  const resetLevel = (idx: number) => {
+    const lvl = REST_LEVELS[idx];
+    setMethod(lvl.id === 1 ? 'GET' : lvl.id === 2 ? 'DELETE' : 'GET');
+    setPath(lvl.id === 2 ? '/api/users/999' : '/api/users');
+    setIncludeEtag(false);
+    setResponseStatus(null);
+    setResponseBody(null);
+    setWireLog([]);
+    setShowHint(false);
+    setLevelWon(false);
+    setValidationMsg(null);
+  };
 
-  const saveModuleCompletion = () => {
+  const sendRequest = () => {
+    const timestamp = new Date().toISOString();
+    const frames: string[] = [];
+
+    // Client Request Frame
+    frames.push(`> ${method} ${path} HTTP/1.1`);
+    frames.push(`> Host: api.fullstack-odyssey.dev`);
+    frames.push(`> User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64) AppleWebKit/537.36`);
+    frames.push(`> Accept: application/json`);
+
+    if (method === 'POST') {
+      frames.push(`> Content-Type: application/json`);
+      frames.push(`> Content-Length: 48`);
+      frames.push(`> `);
+      frames.push(`> {"name":"Sarah Connor","role":"Security Engineer"}`);
+    } else if (method === 'OPTIONS') {
+      frames.push(`> Origin: https://app.fullstack-odyssey.dev`);
+      frames.push(`> Access-Control-Request-Method: POST`);
+      frames.push(`> Access-Control-Request-Headers: Content-Type, Authorization`);
+    } else if (includeEtag) {
+      frames.push(`> If-None-Match: "w91a-882f"`);
+    }
+
+    frames.push(''); // blank separator
+
+    // Server Response Frame Calculation
+    let status = 200;
+    let body = '';
+
+    if (method === 'OPTIONS') {
+      status = 204;
+      frames.push(`< HTTP/1.1 204 No Content`);
+      frames.push(`< Access-Control-Allow-Origin: https://app.fullstack-odyssey.dev`);
+      frames.push(`< Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS`);
+      frames.push(`< Access-Control-Allow-Headers: Content-Type, Authorization`);
+      frames.push(`< Access-Control-Max-Age: 86400`);
+      body = '(No content - preflight pre-approved by CORS policy)';
+    } else if (method === 'POST' && path === '/api/users') {
+      status = 201;
+      frames.push(`< HTTP/1.1 201 Created`);
+      frames.push(`< Location: /api/users/104`);
+      frames.push(`< Content-Type: application/json; charset=utf-8`);
+      body = JSON.stringify({ id: 104, name: "Sarah Connor", role: "Security Engineer", createdAt: timestamp }, null, 2);
+    } else if (method === 'DELETE' && path === '/api/users/999') {
+      status = 404;
+      frames.push(`< HTTP/1.1 404 Not Found`);
+      frames.push(`< Content-Type: application/json; charset=utf-8`);
+      body = JSON.stringify({ error: "UserNotFound", message: "User with ID 999 does not exist in relational store." }, null, 2);
+    } else if (method === 'DELETE' && path === '/api/users/42') {
+      status = 200;
+      frames.push(`< HTTP/1.1 200 OK`);
+      frames.push(`< Content-Type: application/json; charset=utf-8`);
+      body = JSON.stringify({ success: true, message: "User 42 deleted successfully." }, null, 2);
+    } else if (method === 'GET' && includeEtag) {
+      status = 304;
+      frames.push(`< HTTP/1.1 304 Not Modified`);
+      frames.push(`< ETag: "w91a-882f"`);
+      frames.push(`< Cache-Control: max-age=3600, must-revalidate`);
+      body = '(304 Not Modified: 0 payload bytes transmitted. Browser cache re-validated.)';
+    } else {
+      status = 200;
+      frames.push(`< HTTP/1.1 200 OK`);
+      frames.push(`< Content-Type: application/json; charset=utf-8`);
+      frames.push(`< ETag: "w91a-882f"`);
+      body = JSON.stringify({ users: [{ id: 42, name: "Alice Vance" }, { id: 101, name: "Gordon Freeman" }] }, null, 2);
+    }
+
+    setResponseStatus(status);
+    setResponseBody(body);
+    setWireLog(frames);
+  };
+
+  const handleCheckAnswer = () => {
+    if (responseStatus === null) {
+      setValidationMsg({
+        passed: false,
+        message: 'You have not sent an HTTP request yet. Configure the method and path, then click "Send Request".'
+      });
+      return;
+    }
+
+    if (responseStatus === currentLevel.targetStatus && method === currentLevel.method) {
+      setLevelWon(true);
+      setValidationMsg({
+        passed: true,
+        message: `Verification Passed! Received expected HTTP ${responseStatus} with valid wire protocol semantics.`
+      });
+      markCompleted(currentLevel.id);
+    } else {
+      setValidationMsg({
+        passed: false,
+        message: `Received HTTP ${responseStatus} with ${method}, but Level ${currentLevel.id} requires ${currentLevel.method} returning HTTP ${currentLevel.targetStatus}. Check the objective.`
+      });
+    }
+  };
+
+  const markCompleted = (id: number) => {
     try {
       const saved = localStorage.getItem('odyssey_completed_modules');
-      const list = saved ? JSON.parse(saved) : [];
+      const list: string[] = saved ? JSON.parse(saved) : [];
       if (!list.includes('rest-api')) {
         list.push('rest-api');
         localStorage.setItem('odyssey_completed_modules', JSON.stringify(list));
@@ -105,116 +204,39 @@ export const RestApiLab: React.FC = () => {
     } catch {}
   };
 
-  const resetLevel = (idx: number) => {
-    const l = REST_LEVELS[idx];
-    setMethod(l.method);
-    setPath(l.path);
-    setOrigin('https://app.example.com');
-    setIncludeEtag(false);
-    setResponseStatus(null);
-    setResponseHeaders({});
-    setResponseBody(null);
-    setWireLog([]);
-    setShowHint(false);
-    setLevelWon(false);
-  };
-
-  const sendRequest = () => {
-    const logs: string[] = [];
-
-    // Preflight check for Level 3
-    if (currentLevel.id === 3 || method === 'OPTIONS') {
-      logs.push(`> OPTIONS ${path} HTTP/1.1`);
-      logs.push(`> Host: api.odyssey.internal`);
-      logs.push(`> Origin: ${origin}`);
-      logs.push(`> Access-Control-Request-Method: POST`);
-      logs.push(`< HTTP/1.1 204 No Content`);
-      logs.push(`< Access-Control-Allow-Origin: *`);
-      logs.push(`< Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS`);
-      setResponseStatus(204);
-      setResponseHeaders({
-        'access-control-allow-origin': '*',
-        'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS'
-      });
-      setResponseBody('// Preflight OK. Browser permitted cross-origin request.');
-      setWireLog(logs);
-      return;
-    }
-
-    logs.push(`> ${method} ${path} HTTP/1.1`);
-    logs.push(`> Host: api.odyssey.internal`);
-    logs.push(`> Origin: ${origin}`);
-
-    if (includeEtag && currentLevel.id === 4) {
-      logs.push(`> If-None-Match: "w91a-882f"`);
-      logs.push(`< HTTP/1.1 304 Not Modified`);
-      logs.push(`< ETag: "w91a-882f"`);
-      logs.push(`< Content-Length: 0`);
-      setResponseStatus(304);
-      setResponseHeaders({ 'etag': '"w91a-882f"', 'content-length': '0' });
-      setResponseBody('// 304 Not Modified: Cache is fresh. 0 bytes transferred over wire.');
-      setWireLog(logs);
-      return;
-    }
-
-    if (method === 'GET') {
-      logs.push(`< HTTP/1.1 200 OK`);
-      logs.push(`< Content-Type: application/json`);
-      setResponseStatus(200);
-      setResponseHeaders({ 'content-type': 'application/json', 'etag': '"w91a-882f"' });
-      setResponseBody(JSON.stringify({ users: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }] }, null, 2));
-    } else if (method === 'POST') {
-      logs.push(`> Content-Type: application/json`);
-      logs.push(`> {"name": "Charlie", "email": "charlie@example.com"}`);
-      logs.push(`< HTTP/1.1 201 Created`);
-      logs.push(`< Location: /api/users/42`);
-      setResponseStatus(201);
-      setResponseHeaders({ 'content-type': 'application/json', 'location': '/api/users/42' });
-      setResponseBody(JSON.stringify({ id: 42, name: 'Charlie', status: 'created' }, null, 2));
-    } else if (method === 'DELETE') {
-      logs.push(`< HTTP/1.1 204 No Content`);
-      setResponseStatus(204);
-      setResponseHeaders({});
-      setResponseBody('// 204 No Content: Resource successfully deleted.');
-    }
-
-    setWireLog(logs);
-  };
-
   const autoPlaySolution = () => {
-    resetLevel(levelIdx);
-    setTimeout(() => {
-      if (currentLevel.id === 1) setMethod('POST');
-      if (currentLevel.id === 2) setMethod('DELETE');
-      if (currentLevel.id === 3) setMethod('OPTIONS');
-      if (currentLevel.id === 4) setIncludeEtag(true);
+    setMethod(currentLevel.method);
+    setPath(currentLevel.path);
+    if (currentLevel.id === 4) setIncludeEtag(true);
 
-      setTimeout(() => {
-        sendRequest();
-      }, 400);
+    setTimeout(() => {
+      sendRequest();
     }, 200);
   };
 
   return (
     <div className="lab-split-container">
-      {/* LEFT PANEL: Guided Lesson */}
+      {/* LEFT PANEL: Guided Lesson Narrative */}
       <div className="guide-panel">
+        {/* Level Indicator Tabs */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {REST_LEVELS.map((lvl, idx) => (
             <button
               key={lvl.id}
               className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
               onClick={() => setLevelIdx(idx)}
+              style={{ borderRadius: 9999, padding: '4px 12px' }}
             >
               Level {lvl.id}
             </button>
           ))}
         </div>
 
+        {/* Narrative Card */}
         <div className="lesson-card" style={{ marginBottom: 0 }}>
           <div className="lesson-step-header">
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {currentLevel.subtitle}
               </div>
               <h2 className="lesson-step-title">{currentLevel.title}</h2>
@@ -224,7 +246,7 @@ export const RestApiLab: React.FC = () => {
 
           <p className="lesson-explanation">{currentLevel.story}</p>
 
-          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 10, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
             <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
             {currentLevel.concept}
           </div>
@@ -236,102 +258,159 @@ export const RestApiLab: React.FC = () => {
             </div>
           </div>
 
-          {/* Interactive Request Builder Controls */}
-          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 14, marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Request Configuration:
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
-              <select
-                value={method}
-                onChange={(e) => setMethod(e.target.value as any)}
-                className="module-switcher"
-                style={{ fontWeight: 700 }}
-              >
-                <option value="GET">GET</option>
-                <option value="POST">POST</option>
-                <option value="DELETE">DELETE</option>
-                <option value="OPTIONS">OPTIONS</option>
-              </select>
-              <input
-                type="text"
-                value={path}
-                onChange={(e) => setPath(e.target.value)}
-                style={{ flex: 1, padding: '6px 10px', border: '1px solid var(--border-strong)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 13 }}
-              />
-            </div>
-
-            {currentLevel.id === 4 && (
-              <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input
-                  type="checkbox"
-                  checked={includeEtag}
-                  onChange={(e) => setIncludeEtag(e.target.checked)}
-                />
-                Send Cached ETag (If-None-Match: "w91a-882f")
-              </label>
-            )}
-          </div>
-
-          <div className="lesson-actions">
-            <button className="btn btn-primary btn-sm" onClick={sendRequest}>
-              Send HTTP Request →
-            </button>
+          {/* Action & Hint Controls */}
+          <div className="lesson-actions" style={{ marginBottom: 12 }}>
             <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
+              <HelpCircle size={12} />
               {showHint ? 'Hide Hint' : 'Need a Hint?'}
             </button>
             <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
-              Show Solution
+              <Eye size={12} />
+              Auto-Fill Solution
             </button>
             <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
-              Reset
+              <RefreshCw size={12} />
+              Reset Level
             </button>
           </div>
 
           {showHint && (
-            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
+            <div style={{ marginBottom: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 8, fontSize: 13, color: '#92400e' }}>
               <strong>Hint: </strong>{currentLevel.hint}
             </div>
           )}
+
+          {/* Explicit Validation Check Button */}
+          <div style={{ paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
+            <button
+              className="btn btn-primary"
+              onClick={handleCheckAnswer}
+              style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontWeight: 700 }}
+            >
+              <CheckCircle2 size={14} />
+              Check My Answer
+            </button>
+
+            {validationMsg && (
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: '10px 12px',
+                  borderRadius: 8,
+                  fontSize: 12.5,
+                  background: validationMsg.passed ? 'var(--success-light)' : 'var(--danger-light)',
+                  border: `1px solid ${validationMsg.passed ? 'var(--success-border)' : 'var(--danger-border)'}`,
+                  color: validationMsg.passed ? '#065f46' : '#991b1b',
+                  fontWeight: 500
+                }}
+              >
+                {validationMsg.message}
+              </div>
+            )}
+          </div>
         </div>
 
-        {levelWon && (
-          <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: 14, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontWeight: 700, color: 'var(--success)' }}>Level Completed!</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>You mastered HTTP contracts and status codes.</div>
+        {/* Narrative Bridge to Next Level */}
+        {levelWon && levelIdx < REST_LEVELS.length - 1 && (
+          <div style={{ background: 'var(--bento-mint-bg)', border: '1.5px solid var(--bento-mint-border)', padding: 14, borderRadius: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--bento-mint-text)', marginBottom: 4 }}>
+              Next Up: {REST_LEVELS[levelIdx + 1].title}
             </div>
-            {levelIdx < REST_LEVELS.length - 1 ? (
-              <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)}>
-                Next Level →
-              </button>
-            ) : (
-              <span className="badge badge-success">Module Mastered!</span>
-            )}
+            <div style={{ fontSize: 12, color: 'var(--bento-mint-text)', opacity: 0.85, marginBottom: 10 }}>
+              Now that you understand basic methods, see what happens when clients request missing resources or trigger browser security sandboxes.
+            </div>
+            <button
+              className="btn btn-success btn-sm btn-pill"
+              onClick={() => setLevelIdx(levelIdx + 1)}
+              style={{ gap: 6 }}
+            >
+              Advance to Level {levelIdx + 2}
+              <ArrowRight size={12} />
+            </button>
           </div>
         )}
       </div>
 
-      {/* RIGHT PANEL: Live Wire Inspector */}
-      <div className="canvas-panel">
-        <div className="canvas-header">
+      {/* RIGHT PANEL: Interactive HTTP Client Workbench & Wire Terminal */}
+      <div className="canvas-panel" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="canvas-header" style={{ marginBottom: 0, paddingBottom: 10 }}>
           <div>
-            <div className="canvas-title">HTTP Wire Socket & Status Code Inspector</div>
+            <div className="canvas-title">HTTP Client Workbench &amp; Wire Protocol Inspector</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              See raw HTTP/1.1 frames traveling between browser and web server.
+              Configure request methods, route paths, headers, and observe raw TCP wire frames.
             </div>
           </div>
           <div>
             {responseStatus && (
-              <span className={`badge ${responseStatus >= 200 && responseStatus < 300 ? 'badge-success' : responseStatus >= 300 && responseStatus < 400 ? 'badge-indigo' : 'badge-danger'}`}>
+              <span className={`badge ${responseStatus >= 200 && responseStatus < 300 ? 'badge-success' : responseStatus >= 300 && responseStatus < 400 ? 'badge-indigo' : 'badge-danger'}`} style={{ fontSize: 12, padding: '4px 10px' }}>
                 HTTP {responseStatus}
               </span>
             )}
           </div>
         </div>
 
+        {/* Interactive URL Bar & Request Controls */}
+        <div style={{ background: '#f8fafc', border: '1.5px solid var(--border-light)', borderRadius: 12, padding: 14 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+            {/* Method Pill Selector */}
+            <select
+              value={method}
+              onChange={(e) => setMethod(e.target.value as any)}
+              className="module-switcher"
+              style={{
+                fontWeight: 800,
+                color: method === 'GET' ? '#2563eb' : method === 'POST' ? '#059669' : method === 'DELETE' ? '#dc2626' : '#7c3aed',
+                borderColor: 'var(--border-strong)',
+                background: '#ffffff'
+              }}
+            >
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="DELETE">DELETE</option>
+              <option value="OPTIONS">OPTIONS</option>
+            </select>
+
+            {/* Path Input */}
+            <input
+              type="text"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                border: '1.5px solid var(--border-strong)',
+                borderRadius: 9999,
+                fontFamily: 'var(--font-mono)',
+                fontSize: 13,
+                outline: 'none',
+                background: '#ffffff'
+              }}
+              placeholder="/api/users"
+            />
+
+            {/* Send Request Button */}
+            <button className="btn btn-primary btn-pill" onClick={sendRequest} style={{ gap: 6, fontWeight: 700 }}>
+              <Send size={13} />
+              Send Request
+            </button>
+          </div>
+
+          {/* Conditional Options / Headers */}
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
+            <span style={{ fontWeight: 600 }}>Header Options:</span>
+            <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={includeEtag}
+                onChange={(e) => setIncludeEtag(e.target.checked)}
+              />
+              Send Cached ETag (If-None-Match: "w91a-882f")
+            </label>
+          </div>
+        </div>
+
         {/* Authentic macOS Wire Protocol Terminal */}
-        <div className="terminal-window" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div className="terminal-window" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 220 }}>
           <div className="terminal-header">
             <div className="terminal-dots">
               <span className="dot dot-red" />
@@ -345,10 +424,10 @@ export const RestApiLab: React.FC = () => {
             <div style={{ width: 36 }} />
           </div>
 
-          <div className="terminal-body" style={{ flex: 1, overflowY: 'auto', maxHeight: 220 }}>
+          <div className="terminal-body" style={{ flex: 1, overflowY: 'auto', maxHeight: 200 }}>
             {wireLog.length === 0 ? (
-              <div style={{ color: '#71717a', fontStyle: 'italic', padding: '6px 0' }}>
-                Click "Send HTTP Request" above to stream raw TCP socket frames...
+              <div style={{ color: '#71717a', fontStyle: 'italic', padding: '8px 0' }}>
+                Click "Send Request" above to stream raw TCP socket frames between browser and server...
               </div>
             ) : (
               wireLog.map((line, idx) => (
