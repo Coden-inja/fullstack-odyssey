@@ -10,8 +10,8 @@
    ========================================================================== */
 
 :root {
-  /* Fonts - Ultra-Crisp, High-Legibility Typography */
-  --font-display: 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Fonts - Authentic Creem Typography with Natural Un-smudged Weight */
+  --font-display: 'Gasoek One', ui-sans-serif, system-ui, sans-serif;
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, Menlo, monospace;
 
@@ -620,11 +620,11 @@ body {
 
 .hero-title {
   font-family: var(--font-display);
-  font-size: clamp(2.2rem, 5vw, 3.6rem);
-  font-weight: 800;
-  line-height: 1.15;
+  font-size: clamp(2.6rem, 5.5vw, 4.2rem);
+  font-weight: 400 !important;
+  line-height: 1.08;
   color: #0f172a;
-  letter-spacing: -0.03em;
+  letter-spacing: 0.015em;
   margin-bottom: 16px;
   text-transform: none;
 }
@@ -705,12 +705,12 @@ body {
 
 .card-title {
   font-family: var(--font-display);
-  font-size: 21px;
-  font-weight: 700;
-  line-height: 1.3;
+  font-size: 23px;
+  font-weight: 400 !important;
+  line-height: 1.25;
   color: #0f172a;
   margin-bottom: 6px;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.015em;
 }
 
 .card-tagline {
@@ -774,9 +774,9 @@ body {
 }
 
 .lesson-step-title {
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--text-main);
   letter-spacing: -0.02em;
 }
@@ -856,9 +856,9 @@ body {
 }
 
 .canvas-title {
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 700;
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 800;
   color: var(--text-main);
   letter-spacing: -0.02em;
 }

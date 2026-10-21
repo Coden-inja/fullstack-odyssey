@@ -63,17 +63,15 @@ export const LandingCatalog: React.FC<LandingCatalogProps> = ({ onSelectModule }
       <section className="catalog-hero">
         <div className="hero-pill">
           <Sparkles size={13} style={{ color: '#7c3aed' }} />
-          INTERACTIVE FULLSTACK CURRICULUM • ZERO BLACK-BOX CODE
+          10 INTERACTIVE HANDS-ON LABS
         </div>
 
         <h1 className="hero-title">
-          LEARN HOW SYSTEMS WORK.<br />
-          SEE EVERY PACKET, QUEUE &amp; MERKLE POINTER.
+          Master Fullstack Engineering Visually.
         </h1>
 
         <p className="hero-subtitle">
-          No hand-wavy metaphors. Direct, interactive visual simulators that walk you step-by-step
-          through the Node.js Event Loop, SQL relational algebra, React Flight payloads, and Git DAG mechanics.
+          Interactive step-by-step labs that show you how web servers, databases, and deployment pipelines actually work under the hood.
         </p>
 
         {/* Hero Showcase Bento Row: macOS Terminal + Verification Card (Creem-Style) */}
