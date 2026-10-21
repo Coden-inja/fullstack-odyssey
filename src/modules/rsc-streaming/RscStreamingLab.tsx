@@ -1,97 +1,82 @@
 import React, { useState, useEffect } from 'react';
-import { TerminalPane, LogEntry } from '../../components/TerminalPane';
 
-type StreamPhase = 'idle' | 'shell_streamed' | 'data_resolved' | 'client_hydrated';
+interface RscLevel {
+  id: number;
+  title: string;
+  subtitle: string;
+  story: string;
+  concept: string;
+  goalDescription: string;
+  hint: string;
+  targetState: string;
+}
+
+const RSC_LEVELS: RscLevel[] = [
+  {
+    id: 1,
+    title: 'Level 1: The Instant Shell',
+    subtitle: 'Sending HTML Before Data is Ready',
+    story: 'In traditional web apps, if a database query takes 800ms, the user sees a blank white screen for 800ms before anything paints.',
+    concept: 'With Streaming SSR, the server sends Chunk 0 (the static header, navigation, and loading skeleton) in 15ms! The user sees a complete layout immediately while slow data loads in the background.',
+    goalDescription: 'Click "Stream Initial Shell (Chunk 0)" to see the page layout paint in 15ms with loading skeletons.',
+    hint: 'Click "Stream Initial Shell (Chunk 0)" to start the stream.',
+    targetState: 'shell_streamed'
+  },
+  {
+    id: 2,
+    title: 'Level 2: Streaming Data Chunks',
+    subtitle: 'How React Flight Protocol Replaces Skeletons',
+    story: 'How does the server send the database data when it finishes without making the browser reload the page?',
+    concept: 'The server leaves the HTTP connection open. When the query completes, it streams Chunk 1 containing React Flight data. The browser swaps the skeleton with the real component without a reload.',
+    goalDescription: 'Click "Stream Data Payload (Chunk 1)" and watch the loading skeleton seamlessly transform into real content.',
+    hint: 'Click "Stream Data Payload" to finish streaming.',
+    targetState: 'data_streamed'
+  },
+  {
+    id: 3,
+    title: 'Level 3: Early Interaction (Selective Hydration)',
+    subtitle: 'Clicking Buttons Before JS Finishes Loading',
+    story: 'What happens if an impatient user clicks a button before the JavaScript bundle has finished downloading?',
+    concept: 'React 18 selective hydration captures the user’s click in an event queue. As soon as the component hydrates, React replays the click so no input is ever lost.',
+    goalDescription: 'Click the "Like" button while it is unhydrated, watch the click get queued, and see it replay automatically upon hydration.',
+    hint: 'Click the "Like" button on the unhydrated card, then click "Hydrate Island".',
+    targetState: 'replayed'
+  }
+];
 
 export const RscStreamingLab: React.FC = () => {
-  const [phase, setPhase] = useState<StreamPhase>('idle');
-  const [userClickedWhileStreaming, setUserClickedWhileStreaming] = useState<boolean>(false);
-  const [buttonClicks, setButtonClicks] = useState<number>(0);
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [levelIdx, setLevelIdx] = useState<number>(0);
+  const currentLevel = RSC_LEVELS[levelIdx];
 
-  // Challenge tracking
-  const [achievedShell, setAchievedShell] = useState<boolean>(false);
-  const [achievedFlightStream, setAchievedFlightStream] = useState<boolean>(false);
-  const [achievedHydration, setAchievedHydration] = useState<boolean>(false);
+  const [streamStage, setStreamStage] = useState<'idle' | 'shell' | 'data'>('idle');
+  const [isHydrated, setIsHydrated] = useState<boolean>(false);
+  const [queuedClicks, setQueuedClicks] = useState<number>(0);
+  const [likeCount, setLikeCount] = useState<number>(42);
+  const [wireChunks, setWireChunks] = useState<string[]>([]);
 
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { id: '1', type: 'system', text: 'React 19 Server DOM & HTTP/2 chunked streaming engine ready.' },
-    { id: '2', type: 'output', text: 'Dispatch HTTP GET /analytics to observe Transfer-Encoding: chunked and Flight wire frames.' }
-  ]);
+  const [showHint, setShowHint] = useState<boolean>(false);
+  const [levelWon, setLevelWon] = useState<boolean>(false);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('odyssey_completed_modules');
-      if (saved && JSON.parse(saved).includes('rsc-streaming')) {
-        setIsCompleted(true);
+    resetLevel(levelIdx);
+  }, [levelIdx]);
+
+  useEffect(() => {
+    if (!levelWon) {
+      if (currentLevel.id === 1 && streamStage === 'shell') {
+        setLevelWon(true);
+        saveModuleCompletion();
+      } else if (currentLevel.id === 2 && streamStage === 'data') {
+        setLevelWon(true);
+        saveModuleCompletion();
+      } else if (currentLevel.id === 3 && isHydrated && likeCount > 42) {
+        setLevelWon(true);
+        saveModuleCompletion();
       }
-    } catch {}
-  }, []);
-
-  const advanceStream = () => {
-    const timestamp = Date.now();
-
-    if (phase === 'idle') {
-      setPhase('shell_streamed');
-      setAchievedShell(true);
-      setLogs(p => [
-        ...p,
-        { id: timestamp.toString(), type: 'system', text: `--> HTTP GET /analytics HTTP/2 (Multiplexed)` },
-        { id: (timestamp + 1).toString(), type: 'output', text: `Chunk 0 (14ms): Flushed <html><head> and <Suspense> fallback shell. TTFB: 14ms.` }
-      ]);
-      return;
     }
+  }, [streamStage, isHydrated, likeCount, levelWon, currentLevel]);
 
-    if (phase === 'shell_streamed') {
-      setPhase('data_resolved');
-      setAchievedFlightStream(true);
-      setLogs(p => [
-        ...p,
-        { id: timestamp.toString(), type: 'system', text: `Server Promise resolved: SELECT * FROM monthly_metrics (180ms)` },
-        { id: (timestamp + 1).toString(), type: 'success', text: `Chunk 1: Flushed React Flight payload + $RC("B:0", "S:0") replacement DOM node.` }
-      ]);
-      return;
-    }
-
-    if (phase === 'data_resolved') {
-      setPhase('client_hydrated');
-      setAchievedHydration(true);
-      const replayed = userClickedWhileStreaming ? ' Replayed 1 queued user click event!' : '';
-      setLogs(p => [
-        ...p,
-        { id: timestamp.toString(), type: 'success', text: `Client: Hydrated 'use client' InteractiveButton island.${replayed}` }
-      ]);
-      if (userClickedWhileStreaming) {
-        setButtonClicks(c => c + 1);
-        setUserClickedWhileStreaming(false);
-      }
-      return;
-    }
-
-    // Reset
-    setPhase('idle');
-    setUserClickedWhileStreaming(false);
-    setButtonClicks(0);
-    setLogs([{ id: Date.now().toString(), type: 'system', text: 'RSC streaming pipeline reset to cold state.' }]);
-  };
-
-  const handleIslandClick = () => {
-    if (phase !== 'client_hydrated') {
-      setUserClickedWhileStreaming(true);
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'output', text: `⚡ Event Queued: User clicked button before hydration! React event replaying queued dispatch.` }
-      ]);
-    } else {
-      setButtonClicks(c => c + 1);
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'success', text: `Client island active: Counter incremented to ${buttonClicks + 1}.` }
-      ]);
-    }
-  };
-
-  const markModuleCompleted = () => {
+  const saveModuleCompletion = () => {
     try {
       const saved = localStorage.getItem('odyssey_completed_modules');
       const list = saved ? JSON.parse(saved) : [];
@@ -99,231 +84,270 @@ export const RscStreamingLab: React.FC = () => {
         list.push('rsc-streaming');
         localStorage.setItem('odyssey_completed_modules', JSON.stringify(list));
       }
-      setIsCompleted(true);
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'success', text: '✓ Module 08 (React Server Components & Streaming) marked as Completed in local storage!' }
-      ]);
     } catch {}
   };
 
-  // Wire Protocol chunks based on stage
-  const wireProtocolPreview = phase === 'idle'
-    ? '// Cold connection: Waiting for HTTP GET /analytics'
-    : phase === 'shell_streamed'
-    ? `HTTP/2 200 OK\r\ncontent-type: text/html; charset=utf-8\r\ntransfer-encoding: chunked\r\n\r\n<!-- Chunk 0: Shell -->\r\n<div class="layout">\r\n  <h1>Analytics Header</h1>\r\n  <!--$?--><template id="B:0"></template>\r\n  <div class="skeleton-pulse">Loading Metrics...</div>\r\n  <!--/$-->\r\n</div>`
-    : phase === 'data_resolved'
-    ? `<!-- Chunk 1: Flight Payload & Swap -->\r\n<div hidden id="S:0">\r\n  <div class="metric-card">\r\n    <h2>$184,200.00</h2>\r\n    <span>Active ARR (+24%)</span>\r\n  </div>\r\n</div>\r\n<script>$RC("B:0","S:0")</script>\r\n<!-- React Flight serialized tree: -->\r\nM1:{"id":"./Button.js","chunks":["client-island.js"],"name":"InteractiveButton"}\r\nJ0:[["$","div",null,{"children":["$","$L1",null,{}]]]`
-    : `<!-- Chunk 2: Hydration Complete -->\r\n// All React Flight references resolved.\r\n// Client bundle: 4.2 kB (Only InteractiveButton.js).\r\n// Server Components zero bundle overhead: 0 kB shipped.`;
+  const resetLevel = (idx: number) => {
+    setStreamStage('idle');
+    setIsHydrated(false);
+    setQueuedClicks(0);
+    setLikeCount(42);
+    setWireChunks([]);
+    setShowHint(false);
+    setLevelWon(false);
+  };
+
+  const streamShell = () => {
+    setStreamStage('shell');
+    setWireChunks([
+      'HTTP/2 200 OK (Transfer-Encoding: chunked)',
+      'Chunk 0 (15ms): <!DOCTYPE html><html><head>...</head><body><nav>My App</nav><div id="skeleton">Loading...</div>'
+    ]);
+  };
+
+  const streamData = () => {
+    setStreamStage('data');
+    setWireChunks(prev => [
+      ...prev,
+      'Chunk 1 (320ms): React Flight Data: 0:["$","div",null,{"children":"Real Data: 12 New Orders"}]'
+    ]);
+  };
+
+  const handleLikeClick = () => {
+    if (!isHydrated) {
+      setQueuedClicks(prev => prev + 1);
+    } else {
+      setLikeCount(prev => prev + 1);
+    }
+  };
+
+  const triggerHydration = () => {
+    setIsHydrated(true);
+    // Replay queued clicks
+    if (queuedClicks > 0) {
+      setLikeCount(prev => prev + queuedClicks);
+      setQueuedClicks(0);
+    }
+  };
+
+  const autoPlaySolution = () => {
+    resetLevel(levelIdx);
+    setTimeout(() => {
+      if (currentLevel.id === 1) streamShell();
+      if (currentLevel.id === 2) {
+        streamShell();
+        setTimeout(() => streamData(), 500);
+      }
+      if (currentLevel.id === 3) {
+        streamShell();
+        streamData();
+        handleLikeClick();
+        setTimeout(() => triggerHydration(), 600);
+      }
+    }, 200);
+  };
 
   return (
-    <>
-      <div className="lab-panel-left">
-        {/* Story Quest */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>Quest: The Zero-Bundle Flight Stream</span>
-            <span className="badge badge-indigo">Module 08</span>
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            React Server Components (RSC) divide an application into two distinct realms:
-            <strong> Server Components</strong> (execute exclusively on Node.js/Edge; 0 kB shipped to client) and
-            <strong> Client Components</strong> (interactive islands declared via <code style={{ color: 'var(--emerald)' }}>'use client'</code>).
-          </p>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, marginTop: 8 }}>
-            <strong>Streaming SSR Invariant:</strong> The server flushes an initial HTML shell in under 20ms.
-            Slow database promises stream as out-of-order chunks using the <strong>React Flight wire format</strong>.
-          </p>
+    <div className="lab-split-container">
+      {/* LEFT PANEL: Guided Lesson */}
+      <div className="guide-panel">
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {RSC_LEVELS.map((lvl, idx) => (
+            <button
+              key={lvl.id}
+              className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setLevelIdx(idx)}
+            >
+              Level {lvl.id}
+            </button>
+          ))}
         </div>
 
-        {/* Stepper Controller */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>HTTP/2 Chunked Stream Controller</span>
-            <span className={`badge ${phase === 'client_hydrated' ? 'badge-emerald' : 'badge-indigo'}`}>
-              Phase: {phase}
-            </span>
+        <div className="lesson-card" style={{ marginBottom: 0 }}>
+          <div className="lesson-step-header">
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+                {currentLevel.subtitle}
+              </div>
+              <h2 className="lesson-step-title">{currentLevel.title}</h2>
+            </div>
+            {levelWon && <span className="badge badge-success">Passed</span>}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <button
-              className="btn btn-primary"
-              onClick={advanceStream}
-              style={{ width: '100%', justifyContent: 'center' }}
-            >
-              {phase === 'idle' && '▶ 1. Stream Initial HTML Shell (TTFB ~ 14ms)'}
-              {phase === 'shell_streamed' && '▶ 2. Resolve Async Query & Stream Flight Chunk'}
-              {phase === 'data_resolved' && '▶ 3. Hydrate Interactive Client Island'}
-              {phase === 'client_hydrated' && '↺ Reset Pipeline to Cold'}
+          <p className="lesson-explanation">{currentLevel.story}</p>
+
+          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
+            {currentLevel.concept}
+          </div>
+
+          <div className="lesson-goal-box">
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
+              <div>{currentLevel.goalDescription}</div>
+            </div>
+          </div>
+
+          <div className="lesson-actions">
+            {currentLevel.id === 1 && (
+              <button className="btn btn-primary btn-sm" onClick={streamShell}>
+                Stream Initial Shell (Chunk 0) →
+              </button>
+            )}
+            {currentLevel.id === 2 && (
+              <>
+                <button className="btn btn-outline btn-sm" onClick={streamShell} disabled={streamStage !== 'idle'}>
+                  1. Stream Shell
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={streamData} disabled={streamStage === 'data'}>
+                  2. Stream Data Payload (Chunk 1) →
+                </button>
+              </>
+            )}
+            {currentLevel.id === 3 && (
+              <>
+                <button className="btn btn-outline btn-sm" onClick={streamShell} disabled={streamStage !== 'idle'}>
+                  1. Prepare Shell
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={triggerHydration}>
+                  Hydrate Island (Replay Clicks) →
+                </button>
+              </>
+            )}
+            <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
+              {showHint ? 'Hide Hint' : 'Need a Hint?'}
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
+              Show Solution
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
+              Reset
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginTop: 14 }}>
-            <div style={{ padding: '8px 10px', background: '#040711', borderRadius: 6 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Client JS Bundle Size:</span>
-              <strong style={{ display: 'block', fontSize: 14, color: 'var(--emerald)', marginTop: 2 }}>
-                4.2 kB <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>(0 kB for RSCs)</span>
-              </strong>
+          {showHint && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
+              <strong>Hint: </strong>{currentLevel.hint}
             </div>
-            <div style={{ padding: '8px 10px', background: '#040711', borderRadius: 6 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>First Contentful Paint:</span>
-              <strong style={{ display: 'block', fontSize: 14, color: phase !== 'idle' ? 'var(--emerald)' : 'var(--text-dim)', marginTop: 2 }}>
-                {phase !== 'idle' ? '14 ms' : 'Awaiting'}
-              </strong>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Challenge Mastery Card */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>RSC Streaming Checklist</span>
-            <span className={`badge ${isCompleted ? 'badge-emerald' : 'badge-indigo'}`}>
-              {isCompleted ? '✓ Completed' : 'In Progress'}
-            </span>
+        {levelWon && (
+          <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: 14, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontWeight: 700, color: 'var(--success)' }}>Level Completed!</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>You mastered HTTP chunked streaming and hydration.</div>
+            </div>
+            {levelIdx < RSC_LEVELS.length - 1 ? (
+              <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)}>
+                Next Level →
+              </button>
+            ) : (
+              <span className="badge badge-success">Module Mastered!</span>
+            )}
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedShell ? '✅' : '⏳'}</span>
-              <span>Flush initial HTML shell without blocking on database queries</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedFlightStream ? '✅' : '⏳'}</span>
-              <span>Stream React Flight protocol payload replacing Suspense skeleton</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedHydration ? '✅' : '⏳'}</span>
-              <span>Selectively hydrate 'use client' island without full-page bundle overhead</span>
-            </div>
-          </div>
-
-          <button
-            className={`btn ${isCompleted ? 'btn-success' : achievedShell && achievedFlightStream && achievedHydration ? 'btn-primary' : 'btn-secondary'}`}
-            disabled={!achievedShell || !achievedFlightStream || !achievedHydration}
-            onClick={markModuleCompleted}
-            style={{ width: '100%', justifyContent: 'center' }}
-          >
-            {isCompleted ? '✓ Module 08 Mastered (Completed)' : 'Mark Module as Done →'}
-          </button>
-        </div>
-
-        <TerminalPane logs={logs} title="HTTP/2 Chunked Wire Buffer" />
+        )}
       </div>
 
-      {/* Right Column: Live Viewport & Flight Wire Protocol */}
-      <div className="lab-panel-right">
-        <div className="canvas-card">
-          <div className="lab-card-title">
-            <span>Browser Viewport (Simulated DOM)</span>
-            <span className="badge badge-indigo">
-              {phase === 'client_hydrated' ? 'Hydrated Interactive' : phase === 'data_resolved' ? 'SSR Rendered' : phase === 'shell_streamed' ? 'Skeleton Active' : 'Idle'}
+      {/* RIGHT PANEL: Live Browser Render & Chunk Inspector */}
+      <div className="canvas-panel">
+        <div className="canvas-header">
+          <div>
+            <div className="canvas-title">Browser Render & HTTP/2 Stream Wire</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Watch the page paint immediately and hydrate interactive islands.
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <span className={`badge ${streamStage !== 'idle' ? 'badge-success' : ''}`}>
+              Shell: {streamStage !== 'idle' ? 'Painted (15ms)' : 'Waiting'}
+            </span>
+            <span className={`badge ${isHydrated ? 'badge-indigo' : ''}`}>
+              Hydration: {isHydrated ? 'Active' : 'Pending JS'}
             </span>
           </div>
+        </div>
 
-          {/* Component Hierarchy */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-            {/* Server Component Shell */}
-            <div style={{
-              padding: '14px 18px',
-              borderRadius: 8,
-              background: '#040711',
-              border: '1px solid var(--border-subtle)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span className="badge badge-indigo">Server Component (RSC)</span>
-                <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>Zero Client JS (0 kB)</span>
+        {/* Browser Mockup Window */}
+        <div style={{ border: '1px solid var(--border-light)', borderRadius: 8, overflow: 'hidden', background: '#ffffff', marginBottom: 16 }}>
+          <div style={{ background: 'var(--bg-subtle)', padding: '8px 12px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 4, background: '#cbd5e1' }} />
+            <div style={{ width: 8, height: 8, borderRadius: 4, background: '#cbd5e1' }} />
+            <div style={{ width: 8, height: 8, borderRadius: 4, background: '#cbd5e1' }} />
+            <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>https://app.example.com/dashboard</span>
+          </div>
+
+          <div style={{ padding: 20 }}>
+            {streamStage === 'idle' ? (
+              <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-dim)' }}>
+                Browser waiting for HTTP response...
               </div>
-              <h3 style={{ fontSize: 16, margin: '4px 0' }}>Enterprise Revenue Dashboard</h3>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                Rendered directly on Node.js/Edge with direct database access. No JSON API serialization needed.
-              </p>
-            </div>
-
-            {/* Suspense Boundary / Client Island */}
-            <div style={{
-              padding: '20px',
-              borderRadius: 8,
-              background: '#040711',
-              border: `1px solid ${phase === 'client_hydrated' ? 'var(--emerald)' : phase === 'data_resolved' ? 'var(--cyan)' : phase === 'shell_streamed' ? 'var(--amber)' : 'var(--border-subtle)'}`,
-              minHeight: 140,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              {phase === 'idle' && (
-                <p style={{ color: 'var(--text-dim)', fontSize: 13 }}>[Awaiting stream start: Click Step 1]</p>
-              )}
-
-              {phase === 'shell_streamed' && (
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ width: 140, height: 28, background: 'rgba(245, 158, 11, 0.2)', borderRadius: 6, margin: '0 auto 10px', animation: 'pulse 1.2s infinite' }} />
-                  <p style={{ color: 'var(--amber)', fontSize: 12 }}>
-                    &lt;Suspense fallback&gt;: Loading live revenue stream from database...
-                  </p>
-                  <button
-                    className="btn btn-secondary"
-                    style={{ fontSize: 11, marginTop: 10 }}
-                    onClick={handleIslandClick}
-                  >
-                    Click Me Before Hydration
-                  </button>
-                  {userClickedWhileStreaming && (
-                    <span className="badge badge-rose" style={{ marginTop: 6, display: 'inline-block' }}>
-                      Event captured in React queue!
-                    </span>
-                  )}
+            ) : (
+              <div>
+                {/* Static Navbar */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 12, borderBottom: '1px solid var(--border-light)', marginBottom: 16 }}>
+                  <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Acme Store</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Logged in as Alex</span>
                 </div>
-              )}
 
-              {(phase === 'data_resolved' || phase === 'client_hydrated') && (
-                <div style={{ textAlign: 'center' }}>
-                  <h2 style={{ fontSize: 36, color: phase === 'client_hydrated' ? 'var(--emerald)' : 'var(--cyan)', margin: 0 }}>
-                    $184,200.00
-                  </h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>
-                    Live Annual Recurring Revenue (+24% MoM)
-                  </p>
+                {/* Main Content Area */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                  {/* Static Component */}
+                  <div style={{ background: 'var(--bg-main)', padding: 14, borderRadius: 6, border: '1px solid var(--border-light)' }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Static Header</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Painted instantly in Chunk 0 (0ms delay).</div>
+                  </div>
 
-                  <div style={{ marginTop: 12, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
-                    <button
-                      className={`btn ${phase === 'client_hydrated' ? 'btn-success' : 'btn-secondary'}`}
-                      onClick={handleIslandClick}
-                      style={{ fontSize: 12 }}
-                    >
-                      {phase === 'client_hydrated' ? `✓ Island Active: ${buttonClicks} Clicks` : 'Island Hydrating...'}
-                    </button>
-                    <span className="badge badge-indigo">'use client' Island</span>
+                  {/* Suspended Dynamic Component */}
+                  <div style={{ background: 'var(--bg-main)', padding: 14, borderRadius: 6, border: '1px solid var(--border-light)' }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
+                      Dynamic Order Feed (Suspense)
+                    </div>
+                    {streamStage === 'shell' ? (
+                      <div style={{ padding: '10px 0', color: 'var(--text-dim)', fontStyle: 'italic', fontSize: 12 }}>
+                        Loading orders from database... (Skeleton)
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ fontSize: 12, color: 'var(--success)', fontWeight: 600, marginBottom: 8 }}>
+                          12 Recent Orders Loaded via Flight Protocol!
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <button
+                            className={`btn btn-sm ${isHydrated ? 'btn-primary' : 'btn-outline'}`}
+                            onClick={handleLikeClick}
+                          >
+                            Like ({likeCount})
+                          </button>
+                          {queuedClicks > 0 && (
+                            <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600 }}>
+                              {queuedClicks} click(s) queued for hydration replay!
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* React Flight Protocol Wire Frame */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Raw React Flight Protocol Wire Stream:</span>
-              <span className="badge">Transfer-Encoding: chunked</span>
-            </div>
-            <pre style={{
-              background: '#02040a',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 6,
-              padding: '12px 14px',
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              color: 'var(--cyan)',
-              lineHeight: 1.5,
-              overflowX: 'auto',
-              maxHeight: 180
-            }}>
-              {wireProtocolPreview}
-            </pre>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* HTTP/2 Chunked Stream Wire Frame */}
+        <div style={{ flex: 1, background: '#0f172a', padding: 14, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc', overflowY: 'auto' }}>
+          <div style={{ color: '#38bdf8', marginBottom: 6, fontWeight: 700 }}>HTTP/2 Streaming Frames:</div>
+          {wireChunks.length === 0 ? (
+            <div style={{ color: '#64748b' }}>No chunks streamed yet</div>
+          ) : (
+            wireChunks.map((chunk, idx) => (
+              <div key={idx} style={{ padding: '3px 0', color: chunk.includes('Chunk 0') ? '#34d399' : '#818cf8', borderBottom: '1px solid #1e293b' }}>
+                {chunk}
+              </div>
+            ))
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 };

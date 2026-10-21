@@ -1,123 +1,91 @@
 import React, { useState, useEffect } from 'react';
-import { TerminalPane, LogEntry } from '../../components/TerminalPane';
 
-interface PipelineStage {
-  id: string;
-  name: string;
-  command: string;
-  durationMs: number;
-  status: 'idle' | 'running' | 'success' | 'failed';
-  layerCached?: boolean;
+interface CicdLevel {
+  id: number;
+  title: string;
+  subtitle: string;
+  story: string;
+  concept: string;
+  goalDescription: string;
+  hint: string;
+  targetOutcome: string;
 }
 
+const CICD_LEVELS: CicdLevel[] = [
+  {
+    id: 1,
+    title: 'Level 1: The Safety Gate',
+    subtitle: 'Catching Bugs Before They Hit Production',
+    story: 'What prevents a developer from accidentally deploying broken code to real customers on a Friday evening?',
+    concept: 'A CI pipeline runs automated quality checks: 1) Type checking (tsc --noEmit), 2) Automated Unit Tests. If even ONE test fails, the pipeline immediately halts. Broken code is never built or deployed.',
+    goalDescription: 'Turn "Simulate Broken Test" ON, run the pipeline, and watch the quality gate abort the deployment before reaching production.',
+    hint: 'Enable "Simulate Broken Test" and click "Run Pipeline".',
+    targetOutcome: 'aborted'
+  },
+  {
+    id: 2,
+    title: 'Level 2: Docker Layer Caching',
+    subtitle: 'From 5 Minutes Down to 4 Seconds',
+    story: 'Why re-download all 500MB of node_modules every time you fix a single typo in a CSS file?',
+    concept: 'Docker caches image layers in order. By copying package.json and running npm install BEFORE copying your source code, Docker reuses the cached layer (CACHED) unless you added a new package.',
+    goalDescription: 'Turn "Use Layer Cache" ON, run the Docker build, and observe all layers hit the cache in 4 seconds.',
+    hint: 'Ensure layer cache is enabled and run the build.',
+    targetOutcome: 'cached'
+  },
+  {
+    id: 3,
+    title: 'Level 3: Zero-Downtime Rollout',
+    subtitle: 'Instant Edge Cutover Without Dropping Connections',
+    story: 'When you deploy a new version of your website, do users see a 502 Bad Gateway while the server restarts?',
+    concept: 'Zero-Downtime Deployment: The new deployment boots up and verifies its health check FIRST. Once healthy, the edge router flips traffic to the new version with zero dropped connections.',
+    goalDescription: 'Run the production rollout, watch the health check pass, and see edge traffic flip seamlessly to the new deployment.',
+    hint: 'Run the production rollout to complete the final cutover.',
+    targetOutcome: 'cutover'
+  }
+];
+
 export const CicdPipelineLab: React.FC = () => {
-  const [stages, setStages] = useState<PipelineStage[]>([
-    { id: 'checkout', name: '1. Checkout & Cache Hydration', command: 'actions/cache@v4 (Restore pnpm store)', durationMs: 400, status: 'idle', layerCached: true },
-    { id: 'typecheck', name: '2. Shift-Left Typecheck', command: 'tsc --noEmit (Strict AST analysis)', durationMs: 600, status: 'idle' },
-    { id: 'test', name: '3. Matrix Unit & Integration Tests', command: 'vitest run --coverage (Node 20, 22)', durationMs: 800, status: 'idle' },
-    { id: 'docker', name: '4. Docker Multi-Stage Build', command: 'docker buildx --cache-from=type=gha', durationMs: 1100, status: 'idle', layerCached: true },
-    { id: 'deploy', name: '5. Vercel Anycast Edge Promotion', command: 'vercel deploy --prod (Traffic flip)', durationMs: 700, status: 'idle' }
+  const [levelIdx, setLevelIdx] = useState<number>(0);
+  const currentLevel = CICD_LEVELS[levelIdx];
+
+  const [simulateFailure, setSimulateFailure] = useState<boolean>(false);
+  const [useCache, setUseCache] = useState<boolean>(true);
+  const [pipelineSteps, setPipelineSteps] = useState<{ name: string; status: 'idle' | 'running' | 'passed' | 'failed' }[]>([
+    { name: '1. Typecheck (tsc --noEmit)', status: 'idle' },
+    { name: '2. Unit Tests (vitest run)', status: 'idle' },
+    { name: '3. Docker Multi-Stage Build', status: 'idle' },
+    { name: '4. Edge Traffic Cutover', status: 'idle' }
   ]);
 
-  const [dockerfileMode, setDockerfileMode] = useState<'optimized' | 'naive'>('optimized');
-  const [simulateTestFailure, setSimulateTestFailure] = useState<boolean>(false);
-  const [isRunning, setIsRunning] = useState<boolean>(false);
-  const [activeStageId, setActiveStageId] = useState<string | null>(null);
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [activeDeployment, setActiveDeployment] = useState<'A' | 'B'>('A');
+  const [trafficDistribution, setTrafficDistribution] = useState<string>('100% on Deployment A (v1.0)');
 
-  // Challenges
-  const [achievedCacheOptimization, setAchievedCacheOptimization] = useState<boolean>(false);
-  const [achievedShiftLeftAbort, setAchievedShiftLeftAbort] = useState<boolean>(false);
-  const [achievedEdgePromotion, setAchievedEdgePromotion] = useState<boolean>(false);
-
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { id: '1', type: 'system', text: 'GitHub Actions Runner [ubuntu-24.04-x64] provisioned.' },
-    { id: '2', type: 'output', text: 'Workflow .github/workflows/deploy.yml ready to evaluate push event.' }
-  ]);
+  const [showHint, setShowHint] = useState<boolean>(false);
+  const [levelWon, setLevelWon] = useState<boolean>(false);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('odyssey_completed_modules');
-      if (saved && JSON.parse(saved).includes('cicd-pipeline')) {
-        setIsCompleted(true);
-      }
-    } catch {}
-  }, []);
+    resetLevel(levelIdx);
+  }, [levelIdx]);
 
-  const triggerPipeline = async () => {
-    setIsRunning(true);
-    const timestamp = Date.now();
+  useEffect(() => {
+    if (!levelWon) {
+      const isFailed = pipelineSteps[1].status === 'failed';
+      const isAllPassed = pipelineSteps.every(s => s.status === 'passed');
 
-    // Reset stages
-    setStages(prev => prev.map(s => ({ ...s, status: 'idle' })));
-    setLogs([
-      { id: timestamp.toString(), type: 'system', text: `$ git push origin main -> SHA: 55491ca` },
-      { id: (timestamp + 1).toString(), type: 'output', text: `Triggered job: release-edge on commit 55491ca` }
-    ]);
-
-    for (let i = 0; i < stages.length; i++) {
-      const st = stages[i];
-      setActiveStageId(st.id);
-
-      // Set to running
-      setStages(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'running' } : s));
-      setLogs(p => [
-        ...p,
-        { id: (Date.now() + i).toString(), type: 'system', text: `--> [Stage ${i + 1}/5] Running: ${st.command}` }
-      ]);
-
-      // Execution latency: Docker stage is much slower if naive
-      const delay = st.id === 'docker' && dockerfileMode === 'naive' ? 1800 : st.durationMs;
-      await new Promise(r => setTimeout(r, delay));
-
-      // Simulate failure in test stage if toggled
-      if (st.id === 'test' && simulateTestFailure) {
-        setStages(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'failed' } : s));
-        setAchievedShiftLeftAbort(true);
-        setLogs(p => [
-          ...p,
-          { id: Date.now().toString(), type: 'error', text: `FAIL: Vitest: 1 of 42 suites failed (auth.test.ts: Expected 401, received 200).` },
-          { id: (Date.now() + 1).toString(), type: 'error', text: `🚨 PIPELINE ABORTED: Shift-left invariant preserved. Zero broken artifacts reached production!` }
-        ]);
-        setIsRunning(false);
-        setActiveStageId(null);
-        return;
-      }
-
-      // Mark success
-      setStages(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'success' } : s));
-
-      if (st.id === 'docker') {
-        if (dockerfileMode === 'optimized') {
-          setAchievedCacheOptimization(true);
-          setLogs(p => [
-            ...p,
-            { id: Date.now().toString(), type: 'success', text: `Docker: CACHED [2/4] COPY package.json pnpm-lock.yaml -> 0.2s.` },
-            { id: (Date.now() + 1).toString(), type: 'success', text: `Multi-stage build complete: Runner distroless image size: 48 MB (Reduced from 1.2 GB).` }
-          ]);
-        } else {
-          setLogs(p => [
-            ...p,
-            { id: Date.now().toString(), type: 'output', text: `Docker: CACHE MISS! COPY . . invalidated package cache. Full pnpm install took 12.8s.` }
-          ]);
-        }
-      }
-
-      if (st.id === 'deploy') {
-        setAchievedEdgePromotion(true);
-        setLogs(p => [
-          ...p,
-          { id: Date.now().toString(), type: 'success', text: `🎉 Vercel Production Deployment: https://fullstack-odyssey.vercel.app [HTTP 200 OK]` },
-          { id: (Date.now() + 1).toString(), type: 'success', text: `Anycast BGP updated across 300+ Edge POPs. Zero dropped TCP connections.` }
-        ]);
+      if (currentLevel.id === 1 && isFailed) {
+        setLevelWon(true);
+        saveModuleCompletion();
+      } else if (currentLevel.id === 2 && isAllPassed && useCache) {
+        setLevelWon(true);
+        saveModuleCompletion();
+      } else if (currentLevel.id === 3 && activeDeployment === 'B') {
+        setLevelWon(true);
+        saveModuleCompletion();
       }
     }
+  }, [pipelineSteps, activeDeployment, useCache, levelWon, currentLevel]);
 
-    setIsRunning(false);
-    setActiveStageId(null);
-  };
-
-  const markModuleCompleted = () => {
+  const saveModuleCompletion = () => {
     try {
       const saved = localStorage.getItem('odyssey_completed_modules');
       const list = saved ? JSON.parse(saved) : [];
@@ -125,230 +93,257 @@ export const CicdPipelineLab: React.FC = () => {
         list.push('cicd-pipeline');
         localStorage.setItem('odyssey_completed_modules', JSON.stringify(list));
       }
-      setIsCompleted(true);
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'success', text: '✓ Module 10 (CI/CD Pipeline & Edge Deploy) marked as Completed in local storage!' }
-      ]);
     } catch {}
   };
 
+  const resetLevel = (idx: number) => {
+    setSimulateFailure(idx === 0);
+    setUseCache(true);
+    setActiveDeployment('A');
+    setTrafficDistribution('100% on Deployment A (v1.0)');
+    setPipelineSteps([
+      { name: '1. Typecheck (tsc --noEmit)', status: 'idle' },
+      { name: '2. Unit Tests (vitest run)', status: 'idle' },
+      { name: '3. Docker Multi-Stage Build', status: 'idle' },
+      { name: '4. Edge Traffic Cutover', status: 'idle' }
+    ]);
+    setShowHint(false);
+    setLevelWon(false);
+  };
+
+  const runPipeline = () => {
+    setPipelineSteps(prev => prev.map(s => ({ ...s, status: 'idle' })));
+
+    // Step 1: Typecheck
+    setTimeout(() => {
+      setPipelineSteps(prev => [
+        { ...prev[0], status: 'passed' },
+        { ...prev[1], status: 'running' },
+        prev[2],
+        prev[3]
+      ]);
+
+      // Step 2: Tests
+      setTimeout(() => {
+        if (simulateFailure) {
+          setPipelineSteps(prev => [
+            prev[0],
+            { ...prev[1], status: 'failed' },
+            { ...prev[2], status: 'idle' },
+            { ...prev[3], status: 'idle' }
+          ]);
+          return;
+        }
+
+        setPipelineSteps(prev => [
+          prev[0],
+          { ...prev[1], status: 'passed' },
+          { ...prev[2], status: 'running' },
+          prev[3]
+        ]);
+
+        // Step 3: Docker Build
+        setTimeout(() => {
+          setPipelineSteps(prev => [
+            prev[0],
+            prev[1],
+            { ...prev[2], status: 'passed' },
+            { ...prev[3], status: 'running' }
+          ]);
+
+          // Step 4: Edge Cutover
+          setTimeout(() => {
+            setPipelineSteps(prev => [
+              prev[0],
+              prev[1],
+              prev[2],
+              { ...prev[3], status: 'passed' }
+            ]);
+            setActiveDeployment('B');
+            setTrafficDistribution('100% on Deployment B (v2.0) - Zero Downtime');
+          }, 800);
+        }, 800);
+      }, 800);
+    }, 400);
+  };
+
+  const autoPlaySolution = () => {
+    resetLevel(levelIdx);
+    setTimeout(() => {
+      if (currentLevel.id === 1) {
+        setSimulateFailure(true);
+      } else {
+        setSimulateFailure(false);
+      }
+      setTimeout(() => runPipeline(), 300);
+    }, 200);
+  };
+
   return (
-    <>
-      <div className="lab-panel-left">
-        {/* Story Quest */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>Quest: The Shift-Left Gate & Docker Layer Invariant</span>
-            <span className="badge badge-indigo">Module 10</span>
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            Modern deployment pipelines enforce two foundational invariants:
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginTop: 10, fontSize: 12 }}>
-            <div style={{ background: '#040711', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
-              <strong style={{ color: 'var(--indigo)' }}>Shift-Left Testing</strong>
-              <p style={{ color: 'var(--text-dim)', marginTop: 2 }}>Fail fast in static analysis before provisioning heavy container instances.</p>
-            </div>
-            <div style={{ background: '#040711', padding: '8px 10px', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
-              <strong style={{ color: 'var(--emerald)' }}>Layer Caching</strong>
-              <p style={{ color: 'var(--text-dim)', marginTop: 2 }}>Separate lockfile dependencies from app code so dependency installs are cached.</p>
-            </div>
-          </div>
+    <div className="lab-split-container">
+      {/* LEFT PANEL: Guided Lesson */}
+      <div className="guide-panel">
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {CICD_LEVELS.map((lvl, idx) => (
+            <button
+              key={lvl.id}
+              className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setLevelIdx(idx)}
+            >
+              Level {lvl.id}
+            </button>
+          ))}
         </div>
 
-        {/* Pipeline Runner Controls */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>Workflow Trigger & Environment Config</span>
-            <span className={`badge ${isRunning ? 'badge-amber' : 'badge-emerald'}`}>
-              {isRunning ? 'Pipeline Running...' : 'Ready'}
-            </span>
+        <div className="lesson-card" style={{ marginBottom: 0 }}>
+          <div className="lesson-step-header">
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+                {currentLevel.subtitle}
+              </div>
+              <h2 className="lesson-step-title">{currentLevel.title}</h2>
+            </div>
+            {levelWon && <span className="badge badge-success">Passed</span>}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div>
-              <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Dockerfile Layer Architecture:</label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, marginTop: 4 }}>
-                <button
-                  className={`btn ${dockerfileMode === 'optimized' ? 'btn-success' : 'btn-secondary'}`}
-                  onClick={() => setDockerfileMode('optimized')}
-                  style={{ fontSize: 11, justifyContent: 'center' }}
-                >
-                  Optimized (Multi-Stage)
-                </button>
-                <button
-                  className={`btn ${dockerfileMode === 'naive' ? 'btn-danger' : 'btn-secondary'}`}
-                  onClick={() => setDockerfileMode('naive')}
-                  style={{ fontSize: 11, justifyContent: 'center' }}
-                >
-                  Naive (Cache-Busted)
-                </button>
-              </div>
-            </div>
+          <p className="lesson-explanation">{currentLevel.story}</p>
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer' }}>
+          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
+            {currentLevel.concept}
+          </div>
+
+          <div className="lesson-goal-box">
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
+              <div>{currentLevel.goalDescription}</div>
+            </div>
+          </div>
+
+          {/* Interactive Pipeline Toggles */}
+          <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label style={{ fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
               <input
                 type="checkbox"
-                checked={simulateTestFailure}
-                onChange={(e) => setSimulateTestFailure(e.target.checked)}
+                checked={simulateFailure}
+                onChange={(e) => setSimulateFailure(e.target.checked)}
               />
-              <span>Simulate Test Suite Failure (Trigger Shift-Left Abort)</span>
+              Simulate Broken Test (Quality Gate Trigger)
             </label>
+            <label style={{ fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={useCache}
+                onChange={(e) => setUseCache(e.target.checked)}
+              />
+              Use Docker Layer Caching (Fast Builds)
+            </label>
+          </div>
 
-            <button
-              className="btn btn-primary"
-              disabled={isRunning}
-              onClick={triggerPipeline}
-              style={{ width: '100%', justifyContent: 'center', marginTop: 4 }}
-            >
-              {isRunning ? 'Executing GitHub Actions Runner...' : '🚀 Trigger Git Push & Workflow Run'}
+          <div className="lesson-actions">
+            <button className="btn btn-primary btn-sm" onClick={runPipeline}>
+              Run Pipeline →
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
+              {showHint ? 'Hide Hint' : 'Need a Hint?'}
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
+              Show Solution
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
+              Reset
             </button>
           </div>
+
+          {showHint && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
+              <strong>Hint: </strong>{currentLevel.hint}
+            </div>
+          )}
         </div>
 
-        {/* Challenge Mastery Card */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>CI/CD Pipeline Checklist</span>
-            <span className={`badge ${isCompleted ? 'badge-emerald' : 'badge-indigo'}`}>
-              {isCompleted ? '✓ Completed' : 'In Progress'}
+        {levelWon && (
+          <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: 14, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontWeight: 700, color: 'var(--success)' }}>Level Completed!</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>You mastered automated quality gates and zero-downtime cutovers.</div>
+            </div>
+            {levelIdx < CICD_LEVELS.length - 1 ? (
+              <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)}>
+                Next Level →
+              </button>
+            ) : (
+              <span className="badge badge-success">Module Mastered!</span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* RIGHT PANEL: Live Pipeline & Edge Cutover Visualizer */}
+      <div className="canvas-panel">
+        <div className="canvas-header">
+          <div>
+            <div className="canvas-title">GitHub Actions Pipeline & Edge Distribution</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Watch sequential quality checks execute and route traffic to healthy instances.
+            </div>
+          </div>
+          <div>
+            <span className={`badge ${activeDeployment === 'B' ? 'badge-success' : 'badge-indigo'}`}>
+              Active Version: {activeDeployment === 'B' ? 'v2.0 (New)' : 'v1.0 (Live)'}
             </span>
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedCacheOptimization ? '✅' : '⏳'}</span>
-              <span>Leverage Docker multi-stage layer caching for sub-3s builds</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedShiftLeftAbort ? '✅' : '⏳'}</span>
-              <span>Catch regression early & abort pipeline before deployment</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedEdgePromotion ? '✅' : '⏳'}</span>
-              <span>Execute zero-downtime Anycast traffic flip to live Edge nodes</span>
-            </div>
-          </div>
-
-          <button
-            className={`btn ${isCompleted ? 'btn-success' : achievedCacheOptimization && achievedEdgePromotion ? 'btn-primary' : 'btn-secondary'}`}
-            disabled={!achievedCacheOptimization || !achievedEdgePromotion}
-            onClick={markModuleCompleted}
-            style={{ width: '100%', justifyContent: 'center' }}
-          >
-            {isCompleted ? '✓ Module 10 Mastered (Full Curriculum 100%!)' : 'Mark Module as Done →'}
-          </button>
         </div>
 
-        <TerminalPane logs={logs} title="GitHub Actions Runner Trace" />
-      </div>
+        {/* Step-by-Step Pipeline Boxes */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+          {pipelineSteps.map((step) => {
+            const isPassed = step.status === 'passed';
+            const isRunning = step.status === 'running';
+            const isFailed = step.status === 'failed';
 
-      {/* Right Column: Visual Stage Pipeline & Dockerfile Inspector */}
-      <div className="lab-panel-right">
-        <div className="canvas-card">
-          <div className="lab-card-title">
-            <span>GitHub Actions Workflow Stages</span>
-            <span className="badge badge-emerald">.github/workflows/deploy.yml</span>
-          </div>
-
-          {/* 5 Pipeline Stages */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-            {stages.map((st) => {
-              const isCurrent = activeStageId === st.id;
-              const isPassed = st.status === 'success';
-              const isFailed = st.status === 'failed';
-
-              return (
-                <div
-                  key={st.id}
-                  style={{
-                    padding: '12px 16px',
-                    borderRadius: 8,
-                    background: isFailed ? 'rgba(244, 63, 94, 0.15)' : isPassed ? 'rgba(16, 185, 129, 0.1)' : isCurrent ? 'rgba(99, 102, 241, 0.2)' : 'rgba(255, 255, 255, 0.02)',
-                    border: `1px solid ${isFailed ? 'var(--rose)' : isPassed ? 'rgba(16, 185, 129, 0.4)' : isCurrent ? 'var(--indigo)' : 'var(--border-subtle)'}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <strong style={{ fontSize: 13, color: isFailed ? 'var(--rose)' : isPassed ? 'var(--emerald)' : isCurrent ? '#fff' : 'var(--text-muted)' }}>
-                        {st.name}
-                      </strong>
-                      {st.layerCached && dockerfileMode === 'optimized' && isPassed && (
-                        <span className="badge badge-emerald" style={{ fontSize: 9 }}>Layer Cached</span>
-                      )}
-                    </div>
-                    <code style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2, display: 'block' }}>
-                      {st.command}
-                    </code>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-dim)' }}>
-                      {st.id === 'docker' && dockerfileMode === 'naive' ? '1800ms' : `${st.durationMs}ms`}
-                    </span>
-                    <span className={`badge ${isFailed ? 'badge-rose' : isPassed ? 'badge-emerald' : isCurrent ? 'badge-amber' : ''}`}>
-                      {isFailed ? '✕ Failed' : isPassed ? '✓ Passed' : isCurrent ? 'Running...' : 'Waiting'}
-                    </span>
-                  </div>
+            return (
+              <div
+                key={step.name}
+                style={{
+                  background: isRunning ? 'var(--primary-light)' : isPassed ? 'var(--success-light)' : isFailed ? 'var(--danger-light)' : '#ffffff',
+                  border: `1px solid ${isRunning ? 'var(--primary)' : isPassed ? 'var(--success-border)' : isFailed ? 'var(--danger-border)' : 'var(--border-light)'}`,
+                  borderRadius: 8,
+                  padding: '12px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontWeight: 600, fontSize: 13, color: isFailed ? 'var(--danger)' : isPassed ? 'var(--success)' : 'var(--text-main)' }}>
+                    {step.name}
+                  </span>
                 </div>
-              );
-            })}
+
+                <div>
+                  {isRunning && <span className="badge badge-indigo">Running...</span>}
+                  {isPassed && <span className="badge badge-success">Passed ✓</span>}
+                  {isFailed && <span className="badge badge-danger">Halted: Test Failed ✕</span>}
+                  {step.status === 'idle' && <span className="badge">Waiting</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Live Anycast Traffic Status */}
+        <div style={{ background: '#0f172a', padding: 16, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc' }}>
+          <div style={{ color: '#38bdf8', marginBottom: 6, fontWeight: 700 }}>Edge Anycast Routing Engine:</div>
+          <div style={{ color: '#e2e8f0', marginBottom: 4 }}>
+            Status: <span style={{ color: activeDeployment === 'B' ? '#34d399' : '#38bdf8', fontWeight: 600 }}>{trafficDistribution}</span>
           </div>
-
-          {/* Dockerfile Multi-Stage Blueprint */}
-          <div className="lab-card" style={{ background: '#040711' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <strong style={{ fontSize: 13, color: 'var(--cyan)' }}>
-                {dockerfileMode === 'optimized' ? 'Production Multi-Stage Dockerfile (Cache-Optimized)' : 'Naive Dockerfile (Cache-Busted Anti-Pattern)'}
-              </strong>
-              <span className={`badge ${dockerfileMode === 'optimized' ? 'badge-emerald' : 'badge-rose'}`}>
-                {dockerfileMode === 'optimized' ? 'Image: 48 MB' : 'Image: 1.2 GB'}
-              </span>
-            </div>
-
-            <pre style={{
-              background: 'rgba(0,0,0,0.5)',
-              padding: '12px 14px',
-              borderRadius: 6,
-              fontFamily: 'var(--font-mono)',
-              fontSize: 11,
-              color: dockerfileMode === 'optimized' ? '#a5b4fc' : 'var(--rose)',
-              lineHeight: 1.5,
-              overflowX: 'auto'
-            }}>
-{dockerfileMode === 'optimized' ? `# Stage 1: Build & Dependencies
-FROM node:22-alpine AS builder
-WORKDIR /app
-# ✅ Cache Invariant: Copy manifests first
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
-
-# ✅ Copy source only after deps cached
-COPY . .
-RUN pnpm build
-
-# Stage 2: Distroless Minimal Runtime
-FROM gcr.io/distroless/nodejs22-debian12 AS runner
-WORKDIR /app
-COPY --from=builder /app/dist ./dist
-EXPOSE 3000
-CMD ["dist/index.js"]` : `# ❌ ANTI-PATTERN: Copy all source before install
-FROM node:22
-WORKDIR /app
-# Every 1-character code edit busts dependency cache!
-COPY . .
-RUN npm install
-RUN npm run build
-CMD ["npm", "start"]`}
-            </pre>
+          <div style={{ color: '#94a3b8', fontSize: 11 }}>
+            Global Edge Points (SFO, LHR, HND, SYD) verified healthy. Zero dropped TCP packets.
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };

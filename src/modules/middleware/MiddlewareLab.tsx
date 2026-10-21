@@ -1,315 +1,122 @@
 import React, { useState, useEffect } from 'react';
-import { TerminalPane, LogEntry } from '../../components/TerminalPane';
 
-export interface MiddlewareLayer {
-  id: string;
-  name: string;
-  arity: number; // 3 for (req, res, next), 4 for (err, req, res, next)
-  category: 'Security' | 'Traffic' | 'Auth' | 'Handler' | 'Error';
-  description: string;
-  codeSnippet: string;
+interface MiddlewareLevel {
+  id: number;
+  title: string;
+  subtitle: string;
+  story: string;
+  concept: string;
+  goalDescription: string;
+  hint: string;
+  pipelineLayers: { name: string; type: 'normal' | 'auth' | 'route' | 'error'; desc: string }[];
+  initialAuth: boolean;
+  initialError: boolean;
+  expectedFinalStatus: number;
 }
 
-const DEFAULT_LAYERS: MiddlewareLayer[] = [
+const MIDDLEWARE_LEVELS: MiddlewareLevel[] = [
   {
-    id: 'cors',
-    name: 'cors({ origin: "*" })',
-    arity: 3,
-    category: 'Security',
-    description: 'Injects Access-Control-Allow-Origin into response headers',
-    codeSnippet: 'res.setHeader("Access-Control-Allow-Origin", "*");\nnext();'
+    id: 1,
+    title: 'Level 1: The Request Journey',
+    subtitle: 'Passing Requests with next()',
+    story: 'When an HTTP request arrives at your Express server, it does not jump straight to the database. It travels down an assembly line of functions called middleware.',
+    concept: 'Every middleware receives three things: (req, res, next). It does some work, and then it MUST call next() to hand the request to the next function. If next() is not called, the browser waits forever.',
+    goalDescription: 'Click "Send Request" and step through each middleware layer to see how next() passes control until a response is sent.',
+    hint: 'Click "Send Request" and then click "Step next() →" until the response reaches status 200.',
+    pipelineLayers: [
+      { name: 'logger', type: 'normal', desc: 'Logs HTTP method and URL (GET /api/profile)' },
+      { name: 'corsHeader', type: 'normal', desc: 'Attaches Access-Control-Allow-Origin: *' },
+      { name: 'profileRouteHandler', type: 'route', desc: 'Sends JSON response { user: "guest" }' }
+    ],
+    initialAuth: true,
+    initialError: false,
+    expectedFinalStatus: 200
   },
   {
-    id: 'rate-limit',
-    name: 'rateLimiter({ max: 60 })',
-    arity: 3,
-    category: 'Traffic',
-    description: 'Queries Redis sliding window counter; halts if threshold exceeded',
-    codeSnippet: 'if (req.tokens <= 0) return next(new Error("RATE_LIMIT_EXCEEDED"));\nres.setHeader("X-RateLimit-Remaining", "59");\nnext();'
+    id: 2,
+    title: 'Level 2: Mutating the Request Context',
+    subtitle: 'Attaching req.user and Custom Headers',
+    story: 'How does your route handler know who is logged in? An authentication middleware verifies the login token and attaches req.user = { id: 42, role: "member" } so all future middleware can read it.',
+    concept: 'req is a single shared JavaScript object. Any middleware can attach new properties to req (like req.user or req.requestId). All subsequent middleware can inspect and use those properties.',
+    goalDescription: 'Watch the tokenVerifier middleware attach req.user and inspect the final modified request object.',
+    hint: 'Send the request and step through to see req.user get populated.',
+    pipelineLayers: [
+      { name: 'requestIdInjector', type: 'normal', desc: 'Generates req.id = "req_88a" and adds header' },
+      { name: 'tokenVerifier', type: 'auth', desc: 'Decodes token and attaches req.user = { id: 42, name: "Alex" }' },
+      { name: 'userDashboardHandler', type: 'route', desc: 'Reads req.user and returns personalized JSON' }
+    ],
+    initialAuth: true,
+    initialError: false,
+    expectedFinalStatus: 200
   },
   {
-    id: 'auth-guard',
-    name: 'authGuard(req, res, next)',
-    arity: 3,
-    category: 'Auth',
-    description: 'Verifies HMAC/RSA signature of Authorization header; attaches req.user',
-    codeSnippet: 'if (!req.headers.authorization?.startsWith("Bearer ")) return next(new Error("UNAUTHORIZED"));\nreq.user = { id: 104, role: "developer" };\nnext();'
+    id: 3,
+    title: 'Level 3: The Security Gate',
+    subtitle: 'Blocking Unauthorized Requests Early',
+    story: 'What if someone tries to access private data without a token? You do not want to run your expensive database code! You stop them at the door.',
+    concept: 'If a middleware returns res.status(401).json({ error: "Unauthorized" }) WITHOUT calling next(), the pipeline immediately stops. Express sends the response back to the browser and never calls subsequent handlers.',
+    goalDescription: 'Turn "Include Auth Token" OFF, send a request, and watch the auth guard stop the request with HTTP 401 before it ever touches the route.',
+    hint: 'Toggle "Include Auth Token" to OFF and click "Send Request".',
+    pipelineLayers: [
+      { name: 'logger', type: 'normal', desc: 'Logs incoming request' },
+      { name: 'authGuard', type: 'auth', desc: 'Checks Authorization header. If missing, sends 401 and HALTS' },
+      { name: 'billingDashboardHandler', type: 'route', desc: 'Expensive database query (should be skipped!)' }
+    ],
+    initialAuth: false,
+    initialError: false,
+    expectedFinalStatus: 401
   },
   {
-    id: 'order-controller',
-    name: 'orderController(req, res)',
-    arity: 3,
-    category: 'Handler',
-    description: 'Core endpoint: queries database and dispatches JSON payload',
-    codeSnippet: 'if (!req.user) return res.status(403).json({ error: "Context Missing" });\nres.status(200).json({ status: "success", orders: [ { id: 4891, total: "$120.00" } ] });'
-  },
-  {
-    id: 'error-handler',
-    name: 'errorHandler(err, req, res, next)',
-    arity: 4,
-    category: 'Error',
-    description: '4-arity error boundary: catches next(err) invocations',
-    codeSnippet: 'const status = err.message === "UNAUTHORIZED" ? 401 : err.message === "RATE_LIMIT_EXCEEDED" ? 429 : 500;\nres.status(status).json({ error: err.message });'
+    id: 4,
+    title: 'Level 4: Error Handling Boundaries',
+    subtitle: 'The Special 4-Argument Function: (err, req, res, next)',
+    story: 'What happens if your database crashes or throws an unexpected exception midway through a request? How does Express prevent the entire Node process from dying?',
+    concept: 'If any middleware calls next(new Error("DB Down")), Express immediately skips all normal middleware and jumps straight to the 4-argument error handler (err, req, res, next). The 4 arguments tell Express this is an error boundary.',
+    goalDescription: 'Simulate an unexpected database error and observe Express bypass normal routes to jump straight to the error handler.',
+    hint: 'Enable "Simulate Database Crash", send a request, and watch the error handler catch it.',
+    pipelineLayers: [
+      { name: 'logger', type: 'normal', desc: 'Logs request' },
+      { name: 'dbFetcher', type: 'route', desc: 'Simulates database read. Throws error and calls next(err)' },
+      { name: 'normalResponseHandler', type: 'normal', desc: 'Normal route (will be bypassed!)' },
+      { name: 'errorHandler', type: 'error', desc: 'Catches error (err, req, res, next) and returns clean 500 JSON' }
+    ],
+    initialAuth: true,
+    initialError: true,
+    expectedFinalStatus: 500
   }
 ];
 
 export const MiddlewareLab: React.FC = () => {
-  const [layers, setLayers] = useState<MiddlewareLayer[]>(DEFAULT_LAYERS);
-  const [activeLayerIndex, setActiveLayerIndex] = useState<number>(-1);
-  const [authHeader, setAuthHeader] = useState<string>('Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.sec');
-  const [exhaustRateLimit, setExhaustRateLimit] = useState<boolean>(false);
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [levelIdx, setLevelIdx] = useState<number>(0);
+  const currentLevel = MIDDLEWARE_LEVELS[levelIdx];
 
-  // Live in-flight request/response context
-  const [reqContext, setReqContext] = useState<{
-    path: string;
-    method: string;
-    headers: Record<string, string>;
-    user: { id: number; role: string } | null;
-  }>({
-    path: '/api/v1/orders',
-    method: 'GET',
-    headers: { authorization: authHeader, host: 'api.enterprise.internal' },
-    user: null
+  const [activeStep, setActiveStep] = useState<number>(-1);
+  const [hasToken, setHasToken] = useState<boolean>(currentLevel.initialAuth);
+  const [hasError, setHasError] = useState<boolean>(currentLevel.initialError);
+
+  const [reqContext, setReqContext] = useState<Record<string, any>>({
+    url: '/api/resource',
+    method: 'GET'
   });
+  const [resHeaders, setResHeaders] = useState<Record<string, string>>({});
+  const [resStatus, setResStatus] = useState<number | null>(null);
+  const [resBody, setResBody] = useState<string | null>(null);
 
-  const [resContext, setResContext] = useState<{
-    statusCode: number | null;
-    headers: Record<string, string>;
-    body: string | null;
-  }>({
-    statusCode: null,
-    headers: {},
-    body: null
-  });
-
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { id: '1', type: 'system', text: 'Express 4.19 router stack initialized. Total registered layers: 5.' },
-    { id: '2', type: 'output', text: 'Challenge: Inspect layer order, simulate request execution, and verify error boundaries.' }
-  ]);
+  const [showHint, setShowHint] = useState<boolean>(false);
+  const [levelWon, setLevelWon] = useState<boolean>(false);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('odyssey_completed_modules');
-      if (saved && JSON.parse(saved).includes('middleware')) {
-        setIsCompleted(true);
-      }
-    } catch {}
-  }, []);
+    resetLevel(levelIdx);
+  }, [levelIdx]);
 
-  const moveLayer = (index: number, direction: 'up' | 'down') => {
-    if (activeLayerIndex !== -1) return; // Cannot mutate while execution is active
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= layers.length) return;
-
-    const nextLayers = [...layers];
-    const temp = nextLayers[index];
-    nextLayers[index] = nextLayers[targetIndex];
-    nextLayers[targetIndex] = temp;
-    setLayers(nextLayers);
-
-    setLogs(p => [
-      ...p,
-      { id: Date.now().toString(), type: 'system', text: `router.stack mutated: Moved ${temp.name} ${direction}.` }
-    ]);
-  };
-
-  const resetPipeline = () => {
-    setActiveLayerIndex(-1);
-    setReqContext({
-      path: '/api/v1/orders',
-      method: 'GET',
-      headers: { authorization: authHeader, host: 'api.enterprise.internal' },
-      user: null
-    });
-    setResContext({
-      statusCode: null,
-      headers: {},
-      body: null
-    });
-    setLogs([
-      { id: Date.now().toString(), type: 'system', text: 'Pipeline context reset to initial HTTP wire state.' }
-    ]);
-  };
-
-  const dispatchInitial = () => {
-    resetPipeline();
-    setActiveLayerIndex(0);
-    setLogs([
-      { id: Date.now().toString(), type: 'system', text: `--> INCOMING TCP: GET /api/v1/orders HTTP/1.1` },
-      { id: (Date.now() + 1).toString(), type: 'output', text: `router.handle(): Entering router.stack[0] (${layers[0].name})` }
-    ]);
-    executeLayer(0, {
-      path: '/api/v1/orders',
-      method: 'GET',
-      headers: { authorization: authHeader, host: 'api.enterprise.internal' },
-      user: null
-    }, {
-      statusCode: null,
-      headers: {},
-      body: null
-    });
-  };
-
-  const executeLayer = (
-    index: number,
-    currReq: typeof reqContext,
-    currRes: typeof resContext
-  ) => {
-    if (index >= layers.length) {
-      setLogs(p => [...p, { id: Date.now().toString(), type: 'error', text: 'router.stack exhausted without res.send()! Socket hanging.' }]);
-      return;
+  useEffect(() => {
+    if (!levelWon && resStatus === currentLevel.expectedFinalStatus) {
+      setLevelWon(true);
+      saveModuleCompletion();
     }
+  }, [resStatus, levelWon, currentLevel]);
 
-    const layer = layers[index];
-    setActiveLayerIndex(index);
-
-    if (layer.id === 'cors') {
-      const nextRes = {
-        ...currRes,
-        headers: { ...currRes.headers, 'Access-Control-Allow-Origin': '*' }
-      };
-      setResContext(nextRes);
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'output', text: `[${index}] cors(): Set Access-Control-Allow-Origin: * -> next()` }
-      ]);
-      return;
-    }
-
-    if (layer.id === 'rate-limit') {
-      if (exhaustRateLimit) {
-        setLogs(p => [
-          ...p,
-          { id: Date.now().toString(), type: 'error', text: `[${index}] rateLimiter: Limit exceeded! next(new Error("RATE_LIMIT_EXCEEDED"))` }
-        ]);
-        jumpToErrorHandler('RATE_LIMIT_EXCEEDED', index, currReq, currRes);
-        return;
-      }
-      const nextRes = {
-        ...currRes,
-        headers: { ...currRes.headers, 'X-RateLimit-Remaining': '59' }
-      };
-      setResContext(nextRes);
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'output', text: `[${index}] rateLimiter: Redis token consumed. Remaining: 59 -> next()` }
-      ]);
-      return;
-    }
-
-    if (layer.id === 'auth-guard') {
-      if (!authHeader || !authHeader.startsWith('Bearer eyJ')) {
-        setLogs(p => [
-          ...p,
-          { id: Date.now().toString(), type: 'error', text: `[${index}] authGuard: Invalid JWT signature! next(new Error("UNAUTHORIZED"))` }
-        ]);
-        jumpToErrorHandler('UNAUTHORIZED', index, currReq, currRes);
-        return;
-      }
-      const nextReq = {
-        ...currReq,
-        user: { id: 104, role: 'developer' }
-      };
-      setReqContext(nextReq);
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'success', text: `[${index}] authGuard: JWT verified! Attached req.user = { id: 104, role: 'developer' } -> next()` }
-      ]);
-      return;
-    }
-
-    if (layer.id === 'order-controller') {
-      if (!currReq.user) {
-        setResContext({
-          ...currRes,
-          statusCode: 403,
-          body: JSON.stringify({ error: 'Forbidden: No authenticated user context on req.user' }, null, 2)
-        });
-        setLogs(p => [
-          ...p,
-          { id: Date.now().toString(), type: 'error', text: `<-- HTTP 403 Forbidden: Handler reached before authGuard attached req.user!` }
-        ]);
-        return;
-      }
-      setResContext({
-        ...currRes,
-        statusCode: 200,
-        body: JSON.stringify({ status: 'success', orders: [{ id: 4891, total: '$120.00', customer: 'User#104' }] }, null, 2)
-      });
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'success', text: `<-- HTTP 200 OK: res.json() dispatched! Connection closed cleanly.` }
-      ]);
-      return;
-    }
-
-    if (layer.id === 'error-handler') {
-      // Reached without error
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'output', text: `[${index}] errorHandler: Normal flow (arity 4 skipped when err is null) -> Done.` }
-      ]);
-    }
-  };
-
-  const jumpToErrorHandler = (
-    errorCode: string,
-    fromIdx: number,
-    currReq: typeof reqContext,
-    currRes: typeof resContext
-  ) => {
-    // Scan router.stack forward for arity === 4
-    const errIdx = layers.findIndex((l, i) => i > fromIdx && l.arity === 4);
-    if (errIdx === -1) {
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'error', text: `FATAL: Uncaught exception ${errorCode}! No 4-argument error handler in router.stack!` }
-      ]);
-      setResContext({
-        ...currRes,
-        statusCode: 500,
-        body: JSON.stringify({ error: 'Internal Server Error', trace: errorCode }, null, 2)
-      });
-      return;
-    }
-
-    setActiveLayerIndex(errIdx);
-    const status = errorCode === 'UNAUTHORIZED' ? 401 : errorCode === 'RATE_LIMIT_EXCEEDED' ? 429 : 500;
-    setResContext({
-      ...currRes,
-      statusCode: status,
-      body: JSON.stringify({ error: errorCode, code: status }, null, 2)
-    });
-    setLogs(p => [
-      ...p,
-      { id: Date.now().toString(), type: 'output', text: `⚡ Error Leap: Skipped layers ${fromIdx + 1}..${errIdx - 1} directly to [${errIdx}] ${layers[errIdx].name}` },
-      { id: (Date.now() + 1).toString(), type: 'error', text: `<-- HTTP ${status} Response emitted by error boundary.` }
-    ]);
-  };
-
-  const stepNext = () => {
-    if (activeLayerIndex === -1) {
-      dispatchInitial();
-      return;
-    }
-    const nextIdx = activeLayerIndex + 1;
-    if (nextIdx < layers.length) {
-      executeLayer(nextIdx, reqContext, resContext);
-    } else {
-      setLogs(p => [...p, { id: Date.now().toString(), type: 'system', text: 'router.stack finished traversal.' }]);
-    }
-  };
-
-  // Validate pipeline order
-  const corsIdx = layers.findIndex(l => l.id === 'cors');
-  const authIdx = layers.findIndex(l => l.id === 'auth-guard');
-  const orderIdx = layers.findIndex(l => l.id === 'order-controller');
-  const errIdx = layers.findIndex(l => l.id === 'error-handler');
-
-  const isPipelineValid = authIdx < orderIdx && errIdx > orderIdx;
-
-  const markModuleCompleted = () => {
+  const saveModuleCompletion = () => {
     try {
       const saved = localStorage.getItem('odyssey_completed_modules');
       const list = saved ? JSON.parse(saved) : [];
@@ -317,249 +124,303 @@ export const MiddlewareLab: React.FC = () => {
         list.push('middleware');
         localStorage.setItem('odyssey_completed_modules', JSON.stringify(list));
       }
-      setIsCompleted(true);
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'success', text: '✓ Module 02 (Express Middleware Onion) marked as Completed in local storage!' }
-      ]);
     } catch {}
   };
 
+  const resetLevel = (idx: number) => {
+    const l = MIDDLEWARE_LEVELS[idx];
+    setActiveStep(-1);
+    setHasToken(l.initialAuth);
+    setHasError(l.initialError);
+    setReqContext({ url: '/api/resource', method: 'GET' });
+    setResHeaders({});
+    setResStatus(null);
+    setResBody(null);
+    setShowHint(false);
+    setLevelWon(false);
+  };
+
+  const sendRequest = () => {
+    setActiveStep(0);
+    setReqContext({
+      url: '/api/resource',
+      method: 'GET',
+      headers: hasToken ? { authorization: 'Bearer tok_demo_984' } : {}
+    });
+    setResHeaders({});
+    setResStatus(null);
+    setResBody(null);
+  };
+
+  const stepNext = () => {
+    if (activeStep < 0) {
+      sendRequest();
+      return;
+    }
+
+    const currentLayer = currentLevel.pipelineLayers[activeStep];
+
+    // Auth gate check in Level 3
+    if (currentLevel.id === 3 && currentLayer.type === 'auth' && !hasToken) {
+      setResStatus(401);
+      setResBody(JSON.stringify({ error: 'Unauthorized: Missing Bearer Token' }, null, 2));
+      return;
+    }
+
+    // Error boundary trigger in Level 4
+    if (currentLevel.id === 4 && currentLayer.name === 'dbFetcher' && hasError) {
+      // Jump straight to errorHandler (last layer)
+      setActiveStep(currentLevel.pipelineLayers.length - 1);
+      setResStatus(500);
+      setResBody(JSON.stringify({ error: 'Internal Server Error: Database Connection Timeout' }, null, 2));
+      return;
+    }
+
+    // Normal layer execution
+    if (currentLayer.name === 'requestIdInjector') {
+      setReqContext(prev => ({ ...prev, requestId: 'req_88a' }));
+      setResHeaders(prev => ({ ...prev, 'x-request-id': 'req_88a' }));
+    } else if (currentLayer.name === 'tokenVerifier') {
+      setReqContext(prev => ({ ...prev, user: { id: 42, name: 'Alex', role: 'member' } }));
+    } else if (currentLayer.name === 'corsHeader') {
+      setResHeaders(prev => ({ ...prev, 'access-control-allow-origin': '*' }));
+    }
+
+    // If next layer is available
+    if (activeStep < currentLevel.pipelineLayers.length - 1) {
+      const nextIdx = activeStep + 1;
+      setActiveStep(nextIdx);
+
+      // If next is a route handler that sends response
+      const nextLayer = currentLevel.pipelineLayers[nextIdx];
+      if (nextLayer.type === 'route') {
+        setResStatus(200);
+        setResBody(JSON.stringify({ success: true, message: 'Response generated by route handler' }, null, 2));
+      }
+    }
+  };
+
+  const autoPlaySolution = () => {
+    resetLevel(levelIdx);
+    setTimeout(() => {
+      sendRequest();
+      setTimeout(() => stepNext(), 500);
+      setTimeout(() => stepNext(), 1000);
+      setTimeout(() => stepNext(), 1500);
+    }, 200);
+  };
+
   return (
-    <>
-      <div className="lab-panel-left">
-        {/* Story Quest Card */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>Quest: The Leaky Pipeline & The Hanging Socket</span>
-            <span className="badge badge-indigo">Module 02</span>
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            In Express, middleware executes sequentially in the exact order declared in the internal{' '}
-            <code style={{ color: 'var(--indigo)' }}>router.stack</code> array. Each layer receives mutable{' '}
-            <code style={{ color: 'var(--cyan)' }}>(req, res, next)</code> references.
-          </p>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, marginTop: 8 }}>
-            <strong>Rule:</strong> If an authentication guard is declared <em>after</em> the route controller, unauthenticated callers reach the database.
-            If a middleware fails to invoke <code style={{ color: 'var(--amber)' }}>next()</code>, the socket hangs indefinitely.
-          </p>
+    <div className="lab-split-container">
+      {/* LEFT PANEL: Guided Lesson */}
+      <div className="guide-panel">
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {MIDDLEWARE_LEVELS.map((lvl, idx) => (
+            <button
+              key={lvl.id}
+              className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setLevelIdx(idx)}
+            >
+              Level {lvl.id}
+            </button>
+          ))}
         </div>
 
-        {/* HTTP Request Configurator */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>Incoming Wire Request</span>
-            <span className="badge">HTTP/1.1</span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="lesson-card" style={{ marginBottom: 0 }}>
+          <div className="lesson-step-header">
             <div>
-              <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Authorization Header:</label>
-              <input
-                type="text"
-                value={authHeader}
-                onChange={(e) => setAuthHeader(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  background: '#040711',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 6,
-                  color: '#fff',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 12,
-                  marginTop: 4
-                }}
-              />
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+                {currentLevel.subtitle}
+              </div>
+              <h2 className="lesson-step-title">{currentLevel.title}</h2>
             </div>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={exhaustRateLimit}
-                onChange={(e) => setExhaustRateLimit(e.target.checked)}
-              />
-              <span>Simulate Redis Token Bucket Exhaustion (Trigger 429)</span>
-            </label>
+            {levelWon && <span className="badge badge-success">Passed</span>}
           </div>
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-            <button className="btn btn-primary" onClick={stepNext}>
-              {activeLayerIndex < 0 ? '▶ Dispatch Request' : 'Step next() →'}
+          <p className="lesson-explanation">{currentLevel.story}</p>
+
+          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
+            {currentLevel.concept}
+          </div>
+
+          <div className="lesson-goal-box">
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
+              <div>{currentLevel.goalDescription}</div>
+            </div>
+          </div>
+
+          {/* Interactive Toggles for Levels 3 & 4 */}
+          {currentLevel.id === 3 && (
+            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={hasToken}
+                  onChange={(e) => setHasToken(e.target.checked)}
+                  style={{ marginRight: 6 }}
+                />
+                Include Auth Token in Request
+              </label>
+            </div>
+          )}
+
+          {currentLevel.id === 4 && (
+            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <label style={{ fontSize: 13, fontWeight: 600, color: '#dc2626', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={hasError}
+                  onChange={(e) => setHasError(e.target.checked)}
+                  style={{ marginRight: 6 }}
+                />
+                Simulate Database Crash in Route
+              </label>
+            </div>
+          )}
+
+          <div className="lesson-actions">
+            {activeStep < 0 ? (
+              <button className="btn btn-primary btn-sm" onClick={sendRequest}>
+                Send Request →
+              </button>
+            ) : (
+              <button className="btn btn-primary btn-sm" onClick={stepNext}>
+                Step next() →
+              </button>
+            )}
+            <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
+              {showHint ? 'Hide Hint' : 'Need a Hint?'}
             </button>
-            <button className="btn btn-secondary" onClick={resetPipeline}>
-              ↺ Reset
+            <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
+              Show Solution
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
+              Reset
             </button>
           </div>
+
+          {showHint && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
+              <strong>Hint: </strong>{currentLevel.hint}
+            </div>
+          )}
         </div>
 
-        {/* Validation & Completion Card */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>Architecture Checklist</span>
-            <span className={`badge ${isCompleted ? 'badge-emerald' : isPipelineValid ? 'badge-indigo' : ''}`}>
-              {isCompleted ? '✓ Completed' : isPipelineValid ? 'Order Correct' : 'Vulnerable'}
-            </span>
+        {levelWon && (
+          <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: 14, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontWeight: 700, color: 'var(--success)' }}>Level Completed!</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>You mastered how middleware chains work.</div>
+            </div>
+            {levelIdx < MIDDLEWARE_LEVELS.length - 1 ? (
+              <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)}>
+                Next Level →
+              </button>
+            ) : (
+              <span className="badge badge-success">Module Mastered!</span>
+            )}
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{authIdx < orderIdx ? '✅' : '❌'}</span>
-              <span>authGuard before orderController (Prevents unauthorized leak)</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{errIdx > orderIdx ? '✅' : '❌'}</span>
-              <span>4-arity errorHandler registered at tail (Catches all exceptions)</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{resContext.statusCode === 200 ? '✅' : '⏳'}</span>
-              <span>Successful 200 OK delivery with authenticated req.user</span>
-            </div>
-          </div>
-
-          <button
-            className={`btn ${isCompleted ? 'btn-success' : isPipelineValid && resContext.statusCode === 200 ? 'btn-primary' : 'btn-secondary'}`}
-            disabled={!isPipelineValid || resContext.statusCode !== 200}
-            onClick={markModuleCompleted}
-            style={{ width: '100%', justifyContent: 'center' }}
-          >
-            {isCompleted ? '✓ Module 02 Mastered (Completed)' : 'Mark Module as Done →'}
-          </button>
-        </div>
-
-        <TerminalPane logs={logs} title="Express Runtime Traces" />
+        )}
       </div>
 
-      {/* Right Column: Layer Stack Reorder & Context Inspector */}
-      <div className="lab-panel-right">
-        {/* Router Stack Manager */}
-        <div className="canvas-card">
-          <div className="lab-card-title">
-            <span>Internal Express router.stack Array</span>
-            <span className="badge badge-emerald">
-              Active Layer: {activeLayerIndex >= 0 ? `[${activeLayerIndex}] ${layers[activeLayerIndex].name}` : 'Awaiting Request'}
-            </span>
+      {/* RIGHT PANEL: Live Middleware Pipeline Visualizer */}
+      <div className="canvas-panel">
+        <div className="canvas-header">
+          <div>
+            <div className="canvas-title">Express Middleware Pipeline</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Watch the request travel step-by-step through registered middleware functions.
+            </div>
           </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span className="badge badge-indigo">GET /api/resource</span>
+            {resStatus && (
+              <span className={`badge ${resStatus === 200 ? 'badge-success' : resStatus === 401 ? 'badge-warning' : 'badge-danger'}`}>
+                HTTP {resStatus}
+              </span>
+            )}
+          </div>
+        </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
-            {layers.map((layer, idx) => {
-              const isActive = activeLayerIndex === idx;
-              const isPast = activeLayerIndex > idx;
-              return (
-                <div
-                  key={layer.id}
-                  style={{
-                    padding: '12px 16px',
-                    borderRadius: 8,
-                    background: isActive ? 'rgba(99, 102, 241, 0.22)' : isPast ? 'rgba(16, 185, 129, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-                    border: `1px solid ${isActive ? 'var(--indigo)' : isPast ? 'rgba(16, 185, 129, 0.3)' : 'var(--border-subtle)'}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)', width: 24 }}>
-                      [{idx}]
-                    </span>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: isActive ? '#fff' : isPast ? 'var(--emerald)' : 'var(--text-muted)' }}>
-                          {layer.name}
-                        </strong>
-                        <span className={`badge ${layer.arity === 4 ? 'badge-rose' : 'badge-indigo'}`}>
-                          arity: {layer.arity}
-                        </span>
-                        <span className="badge">{layer.category}</span>
-                      </div>
-                      <p style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 2 }}>{layer.description}</p>
+        {/* Sequential Middleware Chain */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+          {currentLevel.pipelineLayers.map((layer, idx) => {
+            const isActive = activeStep === idx;
+            const isPassed = activeStep > idx;
+
+            return (
+              <div
+                key={layer.name}
+                style={{
+                  background: isActive ? 'var(--primary-light)' : isPassed ? 'var(--bg-subtle)' : '#ffffff',
+                  border: `1px solid ${isActive ? 'var(--primary)' : isPassed ? 'var(--border-light)' : 'var(--border-strong)'}`,
+                  borderRadius: 8,
+                  padding: '12px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  transition: 'all 0.2s ease',
+                  boxShadow: isActive ? 'var(--shadow-md)' : 'none'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      background: isActive ? 'var(--primary)' : isPassed ? 'var(--success)' : 'var(--bg-hover)',
+                      color: isActive || isPassed ? '#ffffff' : 'var(--text-dim)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 12,
+                      fontWeight: 700
+                    }}
+                  >
+                    {isPassed ? '✓' : idx + 1}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: isActive ? 'var(--primary)' : 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>
+                      app.use({layer.name})
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {layer.desc}
                     </div>
                   </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ padding: '2px 8px', fontSize: 11 }}
-                      disabled={idx === 0 || activeLayerIndex !== -1}
-                      onClick={() => moveLayer(idx, 'up')}
-                      title="Move up in router.stack"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ padding: '2px 8px', fontSize: 11 }}
-                      disabled={idx === layers.length - 1 || activeLayerIndex !== -1}
-                      onClick={() => moveLayer(idx, 'down')}
-                      title="Move down in router.stack"
-                    >
-                      ▼
-                    </button>
-                  </div>
                 </div>
-              );
-            })}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="badge">{layer.type}</span>
+                  {isActive && <span className="badge badge-indigo">Executing next()</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Request Context Inspector */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, flex: 1 }}>
+          <div style={{ background: '#0f172a', padding: 14, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ color: '#38bdf8', marginBottom: 6, fontWeight: 700 }}>Request Context (req):</div>
+            <pre style={{ flex: 1, margin: 0, overflow: 'auto', color: '#e2e8f0' }}>
+              {JSON.stringify(reqContext, null, 2)}
+            </pre>
           </div>
 
-          {/* Context Inspector (req / res in-flight state) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
-            {/* Mutable req object */}
-            <div className="lab-card" style={{ background: '#040711' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <strong style={{ fontSize: 13, color: 'var(--indigo)' }}>Incoming req Context</strong>
-                <span className="badge">Mutable Object</span>
-              </div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div><strong>path:</strong> {reqContext.path}</div>
-                <div><strong>method:</strong> {reqContext.method}</div>
-                <div>
-                  <strong>req.user:</strong>{' '}
-                  <span style={{ color: reqContext.user ? 'var(--emerald)' : 'var(--rose)' }}>
-                    {reqContext.user ? JSON.stringify(reqContext.user) : 'undefined (Unauthenticated)'}
-                  </span>
-                </div>
-                <div>
-                  <strong>headers:</strong>
-                  <pre style={{ margin: '4px 0 0', padding: 6, background: 'rgba(0,0,0,0.4)', borderRadius: 4, overflow: 'auto', maxHeight: 80 }}>
-                    {JSON.stringify(reqContext.headers, null, 2)}
-                  </pre>
-                </div>
-              </div>
+          <div style={{ background: '#0f172a', padding: 14, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ color: '#34d399', marginBottom: 6, fontWeight: 700 }}>Response State (res):</div>
+            <div style={{ marginBottom: 6, fontSize: 12 }}>
+              Status: <span style={{ color: resStatus === 200 ? '#34d399' : '#f87171' }}>{resStatus ? `${resStatus}` : 'Pending'}</span>
             </div>
-
-            {/* Mutable res object */}
-            <div className="lab-card" style={{ background: '#040711' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <strong style={{ fontSize: 13, color: 'var(--emerald)' }}>Outgoing res Context</strong>
-                <span className="badge">
-                  {resContext.statusCode ? `HTTP ${resContext.statusCode}` : 'Pending Header Flush'}
-                </span>
-              </div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div>
-                  <strong>Status:</strong>{' '}
-                  <span style={{ color: resContext.statusCode === 200 ? 'var(--emerald)' : resContext.statusCode ? 'var(--rose)' : 'var(--text-dim)' }}>
-                    {resContext.statusCode || 'Not sent yet'}
-                  </span>
-                </div>
-                <div>
-                  <strong>Headers:</strong>
-                  <pre style={{ margin: '4px 0 0', padding: 6, background: 'rgba(0,0,0,0.4)', borderRadius: 4, overflow: 'auto', maxHeight: 80 }}>
-                    {Object.keys(resContext.headers).length === 0 ? '[No headers injected]' : JSON.stringify(resContext.headers, null, 2)}
-                  </pre>
-                </div>
-                <div>
-                  <strong>Payload:</strong>
-                  <pre style={{ margin: '4px 0 0', padding: 6, background: 'rgba(0,0,0,0.4)', borderRadius: 4, overflow: 'auto', maxHeight: 80, color: '#fff' }}>
-                    {resContext.body || '[Socket open: Awaiting res.send()]'}
-                  </pre>
-                </div>
-              </div>
-            </div>
+            <pre style={{ flex: 1, margin: 0, overflow: 'auto', color: '#e2e8f0' }}>
+              {resBody || '// No response sent yet'}
+            </pre>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };

@@ -1,233 +1,99 @@
 import React, { useState, useEffect } from 'react';
-import { TerminalPane, LogEntry } from '../../components/TerminalPane';
 
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
-
-interface MockResource {
+interface RestApiLevel {
   id: number;
   title: string;
-  amount: number;
-  status: 'pending' | 'settled' | 'refunded';
-  etag: string;
+  subtitle: string;
+  story: string;
+  concept: string;
+  goalDescription: string;
+  hint: string;
+  method: 'GET' | 'POST' | 'DELETE' | 'OPTIONS';
+  path: string;
+  targetStatus: number;
+  expectedHeadersCheck?: (headers: Record<string, string>) => boolean;
 }
 
+const REST_LEVELS: RestApiLevel[] = [
+  {
+    id: 1,
+    title: 'Level 1: Reading vs Creating Data',
+    subtitle: 'GET (200 OK) vs POST (201 Created)',
+    story: 'When you open a profile, your browser fetches data. When you sign up, your browser creates data. HTTP uses different methods to signal the server what you want to do.',
+    concept: 'GET requests fetch existing data and should never modify server state. The server responds with HTTP 200 OK. POST requests submit a body payload to create a new resource. The server responds with HTTP 201 Created.',
+    goalDescription: 'Select POST method, click "Send HTTP Request", and observe the server respond with HTTP 201 Created.',
+    hint: 'Switch the method dropdown from GET to POST and click "Send HTTP Request".',
+    method: 'POST',
+    path: '/api/users',
+    targetStatus: 201
+  },
+  {
+    id: 2,
+    title: 'Level 2: Safe & Idempotent Actions',
+    subtitle: 'Why DELETE Won’t Duplicate Work',
+    story: 'If a payment or delete button glitches and fires 3 times in a row, what happens? That depends on whether the HTTP method is idempotent.',
+    concept: 'An operation is "Idempotent" if running it once or running it 100 times produces the exact same final result. DELETE is idempotent: deleting user #42 once removes them; deleting user #42 again still leaves them removed. POST is NOT idempotent.',
+    goalDescription: 'Send a DELETE request to /api/users/42 and watch the server return 204 No Content.',
+    hint: 'Select DELETE method and click "Send HTTP Request".',
+    method: 'DELETE',
+    path: '/api/users/42',
+    targetStatus: 204
+  },
+  {
+    id: 3,
+    title: 'Level 3: Browser Permissions (CORS)',
+    subtitle: 'The Invisible Preflight OPTIONS Request',
+    story: 'Why does your browser sometimes send a request you never wrote? If your frontend app lives on a different domain than your API, the browser steps in to protect users.',
+    concept: 'Cross-Origin Resource Sharing (CORS): when a website on `frontend.io` tries to send custom headers to `api.service.com`, the browser automatically sends an HTTP OPTIONS preflight request first to ask permission.',
+    goalDescription: 'Switch the Origin to "https://untrusted-site.com" and click "Send HTTP Request" to see the preflight OPTIONS handshake succeed.',
+    hint: 'Ensure Origin is set to cross-origin and dispatch the request.',
+    method: 'OPTIONS',
+    path: '/api/users',
+    targetStatus: 204
+  },
+  {
+    id: 4,
+    title: 'Level 4: Saving Bandwidth with ETags',
+    subtitle: 'HTTP 304 Not Modified',
+    story: 'Why re-download a large list of products or user settings if not a single byte has changed since your last visit?',
+    concept: 'The server provides an ETag (fingerprint of data). When you request again with `If-None-Match: "w91a"`, the server compares the fingerprint. If identical, it returns 304 Not Modified with ZERO response body bytes!',
+    goalDescription: 'Toggle "Send Cached ETag: true", send a GET request, and observe HTTP 304 with 0 bytes transferred.',
+    hint: 'Enable the "If-None-Match" header checkbox and click "Send HTTP Request".',
+    method: 'GET',
+    path: '/api/products',
+    targetStatus: 304
+  }
+];
+
 export const RestApiLab: React.FC = () => {
-  const [method, setMethod] = useState<HttpMethod>('GET');
-  const [endpoint, setEndpoint] = useState<string>('/api/v1/orders/101');
-  const [requestHeaders] = useState<Record<string, string>>({
-    'Accept': 'application/json',
-    'Origin': 'https://checkout.retailer.com',
-    'Authorization': 'Bearer sec_token_prod_99'
-  });
-  const [requestBody, setRequestBody] = useState<string>('{\n  "title": "Hardware Security Key",\n  "amount": 89.00,\n  "status": "pending"\n}');
-  const [ifNoneMatch, setIfNoneMatch] = useState<string>('');
+  const [levelIdx, setLevelIdx] = useState<number>(0);
+  const currentLevel = REST_LEVELS[levelIdx];
 
-  // Server state database
-  const [database, setDatabase] = useState<Record<number, MockResource>>({
-    101: { id: 101, title: 'Enterprise Cloud License', amount: 499.00, status: 'settled', etag: '"w/etag-101-v1"' },
-    102: { id: 102, title: 'Developer Support Tier', amount: 150.00, status: 'pending', etag: '"w/etag-102-v1"' }
-  });
+  const [method, setMethod] = useState<'GET' | 'POST' | 'DELETE' | 'OPTIONS'>(currentLevel.method);
+  const [path, setPath] = useState<string>(currentLevel.path);
+  const [origin, setOrigin] = useState<string>('https://app.example.com');
+  const [includeEtag, setIncludeEtag] = useState<boolean>(false);
 
-  // Response state
-  const [statusCode, setStatusCode] = useState<number>(200);
-  const [statusText, setStatusText] = useState<string>('OK');
+  const [responseStatus, setResponseStatus] = useState<number | null>(null);
   const [responseHeaders, setResponseHeaders] = useState<Record<string, string>>({});
-  const [responseBody, setResponseBody] = useState<string>('');
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [responseBody, setResponseBody] = useState<string | null>(null);
+  const [wireLog, setWireLog] = useState<string[]>([]);
 
-  // Challenges completed checklist
-  const [achievedOptions, setAchievedOptions] = useState<boolean>(false);
-  const [achieved304, setAchieved304] = useState<boolean>(false);
-  const [achievedIdempotency, setAchievedIdempotency] = useState<boolean>(false);
-
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { id: '1', type: 'system', text: 'HTTP RFC 9110 / RFC 7231 wire protocol simulator online.' },
-    { id: '2', type: 'output', text: 'Select a method, inspect the raw HTTP wire frame, and test REST semantics.' }
-  ]);
+  const [showHint, setShowHint] = useState<boolean>(false);
+  const [levelWon, setLevelWon] = useState<boolean>(false);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('odyssey_completed_modules');
-      if (saved && JSON.parse(saved).includes('rest-api')) {
-        setIsCompleted(true);
-      }
-    } catch {}
-  }, []);
+    resetLevel(levelIdx);
+  }, [levelIdx]);
 
-  const dispatchHttpRequest = () => {
-    const timestamp = Date.now();
-    const idMatch = endpoint.match(/\/api\/v1\/orders\/(\d+)/);
-    const targetId = idMatch ? parseInt(idMatch[1], 10) : null;
-
-    // 1. CORS Preflight: OPTIONS
-    if (method === 'OPTIONS') {
-      setStatusCode(204);
-      setStatusText('No Content');
-      const headers = {
-        'Access-Control-Allow-Origin': 'https://checkout.retailer.com',
-        'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization, If-None-Match',
-        'Access-Control-Max-Age': '86400',
-        'Date': new Date().toUTCString(),
-        'Connection': 'keep-alive'
-      };
-      setResponseHeaders(headers);
-      setResponseBody('// 204 No Content: Browser CORS preflight approved. Ready for real HTTP payload.');
-      setAchievedOptions(true);
-      setLogs(p => [
-        ...p,
-        { id: timestamp.toString(), type: 'system', text: `--> OPTIONS ${endpoint} HTTP/1.1 (Browser Preflight)` },
-        { id: (timestamp + 1).toString(), type: 'success', text: `<-- HTTP/1.1 204 No Content: CORS handshake validated!` }
-      ]);
-      return;
+  useEffect(() => {
+    if (!levelWon && responseStatus === currentLevel.targetStatus) {
+      setLevelWon(true);
+      saveModuleCompletion();
     }
+  }, [responseStatus, levelWon, currentLevel]);
 
-    // 2. Conditional Request: ETag & 304 Not Modified
-    if (method === 'GET' && targetId && database[targetId]) {
-      const resource = database[targetId];
-      if (ifNoneMatch && ifNoneMatch === resource.etag) {
-        setStatusCode(304);
-        setStatusText('Not Modified');
-        setResponseHeaders({
-          'ETag': resource.etag,
-          'Cache-Control': 'public, max-age=3600',
-          'Date': new Date().toUTCString()
-        });
-        setResponseBody('// HTTP 304: Zero byte payload transferred over wire. Browser cache is fresh.');
-        setAchieved304(true);
-        setLogs(p => [
-          ...p,
-          { id: timestamp.toString(), type: 'system', text: `--> GET ${endpoint} (If-None-Match: ${ifNoneMatch})` },
-          { id: (timestamp + 1).toString(), type: 'success', text: `<-- HTTP/1.1 304 Not Modified: Cache validation hit! 0 bytes body.` }
-        ]);
-        return;
-      }
-
-      setStatusCode(200);
-      setStatusText('OK');
-      setResponseHeaders({
-        'Content-Type': 'application/json; charset=utf-8',
-        'ETag': resource.etag,
-        'Cache-Control': 'public, max-age=3600',
-        'Content-Length': JSON.stringify(resource).length.toString(),
-        'Date': new Date().toUTCString()
-      });
-      setResponseBody(JSON.stringify(resource, null, 2));
-      setLogs(p => [
-        ...p,
-        { id: timestamp.toString(), type: 'system', text: `--> GET ${endpoint} HTTP/1.1` },
-        { id: (timestamp + 1).toString(), type: 'success', text: `<-- HTTP/1.1 200 OK: Content-Type application/json (ETag: ${resource.etag})` }
-      ]);
-      return;
-    }
-
-    // 3. POST: Non-idempotent creation
-    if (method === 'POST') {
-      const nextId = Math.max(...Object.keys(database).map(Number), 100) + 1;
-      let parsed = { title: 'New Resource', amount: 99.0, status: 'pending' as const };
-      try {
-        parsed = JSON.parse(requestBody);
-      } catch {}
-
-      const newResource: MockResource = {
-        id: nextId,
-        title: parsed.title || 'Created Order',
-        amount: parsed.amount || 100.0,
-        status: parsed.status || 'pending',
-        etag: `"w/etag-${nextId}-v1"`
-      };
-
-      setDatabase(prev => ({ ...prev, [nextId]: newResource }));
-      setStatusCode(201);
-      setStatusText('Created');
-      setResponseHeaders({
-        'Content-Type': 'application/json; charset=utf-8',
-        'Location': `/api/v1/orders/${nextId}`,
-        'ETag': newResource.etag,
-        'Date': new Date().toUTCString()
-      });
-      setResponseBody(JSON.stringify(newResource, null, 2));
-      setLogs(p => [
-        ...p,
-        { id: timestamp.toString(), type: 'system', text: `--> POST ${endpoint} HTTP/1.1 (Non-idempotent)` },
-        { id: (timestamp + 1).toString(), type: 'success', text: `<-- HTTP/1.1 201 Created: Location header set to /api/v1/orders/${nextId}` }
-      ]);
-      return;
-    }
-
-    // 4. PUT: Idempotent full replacement
-    if (method === 'PUT' && targetId) {
-      let parsed = { title: 'Replaced Order', amount: 89.0, status: 'pending' as const };
-      try {
-        parsed = JSON.parse(requestBody);
-      } catch {}
-
-      const updated: MockResource = {
-        id: targetId,
-        title: parsed.title,
-        amount: parsed.amount,
-        status: parsed.status,
-        etag: `"w/etag-${targetId}-v${Date.now().toString().slice(-4)}"`
-      };
-
-      setDatabase(prev => ({ ...prev, [targetId]: updated }));
-      setStatusCode(200);
-      setStatusText('OK');
-      setResponseHeaders({
-        'Content-Type': 'application/json; charset=utf-8',
-        'ETag': updated.etag,
-        'Date': new Date().toUTCString()
-      });
-      setResponseBody(JSON.stringify(updated, null, 2));
-      setAchievedIdempotency(true);
-      setLogs(p => [
-        ...p,
-        { id: timestamp.toString(), type: 'system', text: `--> PUT ${endpoint} HTTP/1.1 (Idempotent Replace)` },
-        { id: (timestamp + 1).toString(), type: 'success', text: `<-- HTTP/1.1 200 OK: Resource #${targetId} replaced cleanly.` }
-      ]);
-      return;
-    }
-
-    // 5. DELETE: Idempotent deletion
-    if (method === 'DELETE' && targetId) {
-      if (!database[targetId]) {
-        setStatusCode(404);
-        setStatusText('Not Found');
-        setResponseBody(JSON.stringify({ error: `Order #${targetId} not found` }, null, 2));
-        setLogs(p => [
-          ...p,
-          { id: timestamp.toString(), type: 'error', text: `--> DELETE ${endpoint} -> 404 Not Found (Already deleted)` }
-        ]);
-        return;
-      }
-      setDatabase(prev => {
-        const next = { ...prev };
-        delete next[targetId];
-        return next;
-      });
-      setStatusCode(204);
-      setStatusText('No Content');
-      setResponseHeaders({ 'Date': new Date().toUTCString() });
-      setResponseBody('// HTTP 204 No Content: Resource successfully deleted from database.');
-      setLogs(p => [
-        ...p,
-        { id: timestamp.toString(), type: 'system', text: `--> DELETE ${endpoint} HTTP/1.1` },
-        { id: (timestamp + 1).toString(), type: 'success', text: `<-- HTTP/1.1 204 No Content: Resource #${targetId} removed.` }
-      ]);
-      return;
-    }
-
-    // 404 fallback
-    setStatusCode(404);
-    setStatusText('Not Found');
-    setResponseBody(JSON.stringify({ error: 'Endpoint or resource does not exist', path: endpoint }, null, 2));
-    setLogs(p => [
-      ...p,
-      { id: timestamp.toString(), type: 'error', text: `--> ${method} ${endpoint} -> 404 Not Found` }
-    ]);
-  };
-
-  const markModuleCompleted = () => {
+  const saveModuleCompletion = () => {
     try {
       const saved = localStorage.getItem('odyssey_completed_modules');
       const list = saved ? JSON.parse(saved) : [];
@@ -235,283 +101,257 @@ export const RestApiLab: React.FC = () => {
         list.push('rest-api');
         localStorage.setItem('odyssey_completed_modules', JSON.stringify(list));
       }
-      setIsCompleted(true);
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'success', text: '✓ Module 03 (REST & API Contracts) marked as Completed in local storage!' }
-      ]);
     } catch {}
   };
 
-  const isMethodSafe = method === 'GET' || method === 'OPTIONS';
-  const isMethodIdempotent = method === 'GET' || method === 'PUT' || method === 'DELETE' || method === 'OPTIONS';
+  const resetLevel = (idx: number) => {
+    const l = REST_LEVELS[idx];
+    setMethod(l.method);
+    setPath(l.path);
+    setOrigin('https://app.example.com');
+    setIncludeEtag(false);
+    setResponseStatus(null);
+    setResponseHeaders({});
+    setResponseBody(null);
+    setWireLog([]);
+    setShowHint(false);
+    setLevelWon(false);
+  };
 
-  // Construct raw wire frame
-  const rawRequestWire = `${method} ${endpoint} HTTP/1.1\r\nHost: api.enterprise.internal\r\nOrigin: ${requestHeaders['Origin']}\r\nAuthorization: ${requestHeaders['Authorization']}${ifNoneMatch ? `\r\nIf-None-Match: ${ifNoneMatch}` : ''}\r\n${method === 'POST' || method === 'PUT' || method === 'PATCH' ? `Content-Type: application/json\r\nContent-Length: ${requestBody.length}\r\n\r\n${requestBody}` : ''}`;
+  const sendRequest = () => {
+    const logs: string[] = [];
+
+    // Preflight check for Level 3
+    if (currentLevel.id === 3 || method === 'OPTIONS') {
+      logs.push(`> OPTIONS ${path} HTTP/1.1`);
+      logs.push(`> Host: api.odyssey.internal`);
+      logs.push(`> Origin: ${origin}`);
+      logs.push(`> Access-Control-Request-Method: POST`);
+      logs.push(`< HTTP/1.1 204 No Content`);
+      logs.push(`< Access-Control-Allow-Origin: *`);
+      logs.push(`< Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS`);
+      setResponseStatus(204);
+      setResponseHeaders({
+        'access-control-allow-origin': '*',
+        'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS'
+      });
+      setResponseBody('// Preflight OK. Browser permitted cross-origin request.');
+      setWireLog(logs);
+      return;
+    }
+
+    logs.push(`> ${method} ${path} HTTP/1.1`);
+    logs.push(`> Host: api.odyssey.internal`);
+    logs.push(`> Origin: ${origin}`);
+
+    if (includeEtag && currentLevel.id === 4) {
+      logs.push(`> If-None-Match: "w91a-882f"`);
+      logs.push(`< HTTP/1.1 304 Not Modified`);
+      logs.push(`< ETag: "w91a-882f"`);
+      logs.push(`< Content-Length: 0`);
+      setResponseStatus(304);
+      setResponseHeaders({ 'etag': '"w91a-882f"', 'content-length': '0' });
+      setResponseBody('// 304 Not Modified: Cache is fresh. 0 bytes transferred over wire.');
+      setWireLog(logs);
+      return;
+    }
+
+    if (method === 'GET') {
+      logs.push(`< HTTP/1.1 200 OK`);
+      logs.push(`< Content-Type: application/json`);
+      setResponseStatus(200);
+      setResponseHeaders({ 'content-type': 'application/json', 'etag': '"w91a-882f"' });
+      setResponseBody(JSON.stringify({ users: [{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }] }, null, 2));
+    } else if (method === 'POST') {
+      logs.push(`> Content-Type: application/json`);
+      logs.push(`> {"name": "Charlie", "email": "charlie@example.com"}`);
+      logs.push(`< HTTP/1.1 201 Created`);
+      logs.push(`< Location: /api/users/42`);
+      setResponseStatus(201);
+      setResponseHeaders({ 'content-type': 'application/json', 'location': '/api/users/42' });
+      setResponseBody(JSON.stringify({ id: 42, name: 'Charlie', status: 'created' }, null, 2));
+    } else if (method === 'DELETE') {
+      logs.push(`< HTTP/1.1 204 No Content`);
+      setResponseStatus(204);
+      setResponseHeaders({});
+      setResponseBody('// 204 No Content: Resource successfully deleted.');
+    }
+
+    setWireLog(logs);
+  };
+
+  const autoPlaySolution = () => {
+    resetLevel(levelIdx);
+    setTimeout(() => {
+      if (currentLevel.id === 1) setMethod('POST');
+      if (currentLevel.id === 2) setMethod('DELETE');
+      if (currentLevel.id === 3) setMethod('OPTIONS');
+      if (currentLevel.id === 4) setIncludeEtag(true);
+
+      setTimeout(() => {
+        sendRequest();
+      }, 400);
+    }, 200);
+  };
 
   return (
-    <>
-      <div className="lab-panel-left">
-        {/* Quest Story */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>Quest: The Ghost Write & Preflight Handshake</span>
-            <span className="badge badge-indigo">Module 03</span>
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            RFC 9110 defines precise mathematical guarantees for HTTP methods:
-          </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginTop: 10 }}>
-            <div style={{ padding: '8px 12px', background: '#040711', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
-              <strong style={{ fontSize: 12, color: 'var(--indigo)' }}>Safe Semantics</strong>
-              <p style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>Read-only; produces zero server state mutation (GET, HEAD, OPTIONS).</p>
-            </div>
-            <div style={{ padding: '8px 12px', background: '#040711', borderRadius: 6, border: '1px solid var(--border-subtle)' }}>
-              <strong style={{ fontSize: 12, color: 'var(--emerald)' }}>Idempotent Semantics</strong>
-              <p style={{ fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>N identical requests produce the identical side effect as 1 request (PUT, DELETE).</p>
-            </div>
-          </div>
+    <div className="lab-split-container">
+      {/* LEFT PANEL: Guided Lesson */}
+      <div className="guide-panel">
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {REST_LEVELS.map((lvl, idx) => (
+            <button
+              key={lvl.id}
+              className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setLevelIdx(idx)}
+            >
+              Level {lvl.id}
+            </button>
+          ))}
         </div>
 
-        {/* HTTP Request Builder */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>Hoppscotch HTTP Request Builder</span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <span className={`badge ${isMethodSafe ? 'badge-emerald' : 'badge-amber'}`}>
-                {isMethodSafe ? 'Safe' : 'Unsafe'}
-              </span>
-              <span className={`badge ${isMethodIdempotent ? 'badge-indigo' : 'badge-rose'}`}>
-                {isMethodIdempotent ? 'Idempotent' : 'Non-Idempotent'}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <select
-              value={method}
-              onChange={(e) => setMethod(e.target.value as HttpMethod)}
-              style={{
-                background: '#040711',
-                color: method === 'GET' ? 'var(--cyan)' : method === 'POST' ? 'var(--emerald)' : method === 'PUT' ? 'var(--amber)' : method === 'DELETE' ? 'var(--rose)' : '#fff',
-                border: '1px solid var(--border-subtle)',
-                padding: '8px 12px',
-                borderRadius: 6,
-                fontFamily: 'var(--font-mono)',
-                fontWeight: 700
-              }}
-            >
-              <option value="GET">GET</option>
-              <option value="POST">POST</option>
-              <option value="PUT">PUT</option>
-              <option value="DELETE">DELETE</option>
-              <option value="OPTIONS">OPTIONS</option>
-            </select>
-
-            <input
-              type="text"
-              value={endpoint}
-              onChange={(e) => setEndpoint(e.target.value)}
-              style={{
-                flex: 1,
-                background: '#040711',
-                color: '#fff',
-                border: '1px solid var(--border-subtle)',
-                padding: '8px 12px',
-                borderRadius: 6,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 12
-              }}
-            />
-          </div>
-
-          {/* Conditional ETag Input for GET */}
-          {method === 'GET' && (
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>If-None-Match (Conditional ETag Validation):</label>
-              <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                <input
-                  type="text"
-                  placeholder='e.g. "w/etag-101-v1"'
-                  value={ifNoneMatch}
-                  onChange={(e) => setIfNoneMatch(e.target.value)}
-                  style={{
-                    flex: 1,
-                    background: '#040711',
-                    color: '#fff',
-                    border: '1px solid var(--border-subtle)',
-                    padding: '6px 10px',
-                    borderRadius: 6,
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11
-                  }}
-                />
-                <button
-                  className="btn btn-secondary"
-                  style={{ fontSize: 11 }}
-                  onClick={() => setIfNoneMatch('"w/etag-101-v1"')}
-                >
-                  Use Order #101 ETag
-                </button>
+        <div className="lesson-card" style={{ marginBottom: 0 }}>
+          <div className="lesson-step-header">
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+                {currentLevel.subtitle}
               </div>
+              <h2 className="lesson-step-title">{currentLevel.title}</h2>
             </div>
-          )}
+            {levelWon && <span className="badge badge-success">Passed</span>}
+          </div>
 
-          {/* Request Payload for POST/PUT */}
-          {(method === 'POST' || method === 'PUT' || method === 'PATCH') && (
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>JSON Request Body:</label>
-              <textarea
-                value={requestBody}
-                onChange={(e) => setRequestBody(e.target.value)}
-                rows={4}
-                style={{
-                  width: '100%',
-                  background: '#040711',
-                  color: '#fff',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 6,
-                  padding: 8,
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 11,
-                  marginTop: 4
-                }}
+          <p className="lesson-explanation">{currentLevel.story}</p>
+
+          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
+            {currentLevel.concept}
+          </div>
+
+          <div className="lesson-goal-box">
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
+              <div>{currentLevel.goalDescription}</div>
+            </div>
+          </div>
+
+          {/* Interactive Request Builder Controls */}
+          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 14, marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>
+              Request Configuration:
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <select
+                value={method}
+                onChange={(e) => setMethod(e.target.value as any)}
+                className="module-switcher"
+                style={{ fontWeight: 700 }}
+              >
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="DELETE">DELETE</option>
+                <option value="OPTIONS">OPTIONS</option>
+              </select>
+              <input
+                type="text"
+                value={path}
+                onChange={(e) => setPath(e.target.value)}
+                style={{ flex: 1, padding: '6px 10px', border: '1px solid var(--border-strong)', borderRadius: 6, fontFamily: 'var(--font-mono)', fontSize: 13 }}
               />
             </div>
+
+            {currentLevel.id === 4 && (
+              <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input
+                  type="checkbox"
+                  checked={includeEtag}
+                  onChange={(e) => setIncludeEtag(e.target.checked)}
+                />
+                Send Cached ETag (If-None-Match: "w91a-882f")
+              </label>
+            )}
+          </div>
+
+          <div className="lesson-actions">
+            <button className="btn btn-primary btn-sm" onClick={sendRequest}>
+              Send HTTP Request →
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
+              {showHint ? 'Hide Hint' : 'Need a Hint?'}
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
+              Show Solution
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
+              Reset
+            </button>
+          </div>
+
+          {showHint && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
+              <strong>Hint: </strong>{currentLevel.hint}
+            </div>
           )}
-
-          <button
-            className="btn btn-primary"
-            onClick={dispatchHttpRequest}
-            style={{ width: '100%', justifyContent: 'center' }}
-          >
-            ▶ Dispatch HTTP Wire Request
-          </button>
         </div>
 
-        {/* Challenge Mastery Card */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>RFC 9110 Challenge Targets</span>
-            <span className={`badge ${isCompleted ? 'badge-emerald' : 'badge-indigo'}`}>
-              {isCompleted ? '✓ Completed' : 'In Progress'}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedOptions ? '✅' : '⏳'}</span>
-              <span>Trigger 204 CORS Preflight Handshake (OPTIONS request)</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achieved304 ? '✅' : '⏳'}</span>
-              <span>Eliminate network bandwidth via 304 Not Modified (ETag Match)</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedIdempotency ? '✅' : '⏳'}</span>
-              <span>Execute idempotent PUT state mutation</span>
-            </div>
-          </div>
-
-          <button
-            className={`btn ${isCompleted ? 'btn-success' : achievedOptions && achieved304 && achievedIdempotency ? 'btn-primary' : 'btn-secondary'}`}
-            disabled={!achievedOptions || !achieved304 || !achievedIdempotency}
-            onClick={markModuleCompleted}
-            style={{ width: '100%', justifyContent: 'center' }}
-          >
-            {isCompleted ? '✓ Module 03 Mastered (Completed)' : 'Mark Module as Done →'}
-          </button>
-        </div>
-
-        <TerminalPane logs={logs} title="HTTP Wire Socket Trace" />
-      </div>
-
-      {/* Right Column: Wire Frame & Response Canvas */}
-      <div className="lab-panel-right">
-        {/* Raw Wire Frame */}
-        <div className="canvas-card">
-          <div className="lab-card-title">
-            <span>Raw HTTP/1.1 Wire Stream</span>
-            <span className="badge badge-indigo">POSIX TCP Socket Buffer</span>
-          </div>
-          <pre style={{
-            background: '#040711',
-            padding: '12px 16px',
-            borderRadius: 8,
-            border: '1px solid var(--border-subtle)',
-            color: 'var(--cyan)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            overflowX: 'auto',
-            marginBottom: 20
-          }}>
-            {rawRequestWire}
-          </pre>
-
-          {/* Response Inspector */}
-          <div className="lab-card" style={{ background: '#040711', marginBottom: 20 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <strong style={{ fontSize: 13, color: '#fff' }}>Incoming Wire Response</strong>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <span className={`badge ${statusCode < 300 ? 'badge-emerald' : statusCode < 400 ? 'badge-cyan' : 'badge-rose'}`}>
-                  HTTP/1.1 {statusCode} {statusText}
-                </span>
-              </div>
-            </div>
-
-            {/* Response Headers */}
-            <div style={{ marginBottom: 10 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Response Headers:</span>
-              <pre style={{
-                background: 'rgba(0,0,0,0.5)',
-                padding: '8px 12px',
-                borderRadius: 6,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                color: 'var(--indigo)',
-                overflowX: 'auto',
-                marginTop: 4
-              }}>
-                {Object.entries(responseHeaders).map(([k, v]) => `${k}: ${v}`).join('\n') || '// No headers yet'}
-              </pre>
-            </div>
-
-            {/* Response Body */}
+        {levelWon && (
+          <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: 14, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Response Body:</span>
-              <pre style={{
-                background: 'rgba(0,0,0,0.5)',
-                padding: '8px 12px',
-                borderRadius: 6,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 11,
-                color: '#fff',
-                overflowX: 'auto',
-                maxHeight: 160,
-                marginTop: 4
-              }}>
-                {responseBody || '// Awaiting server transmission'}
-              </pre>
+              <div style={{ fontWeight: 700, color: 'var(--success)' }}>Level Completed!</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>You mastered HTTP contracts and status codes.</div>
+            </div>
+            {levelIdx < REST_LEVELS.length - 1 ? (
+              <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)}>
+                Next Level →
+              </button>
+            ) : (
+              <span className="badge badge-success">Module Mastered!</span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* RIGHT PANEL: Live Wire Inspector */}
+      <div className="canvas-panel">
+        <div className="canvas-header">
+          <div>
+            <div className="canvas-title">HTTP Wire Socket & Status Code Inspector</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              See raw HTTP/1.1 frames traveling between browser and web server.
             </div>
           </div>
-
-          {/* In-Memory Mock Database */}
-          <div className="lab-card" style={{ background: '#040711' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <strong style={{ fontSize: 13, color: 'var(--emerald)' }}>Server In-Memory Database</strong>
-              <span className="badge">State Table</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-              {Object.values(database).map((res) => (
-                <div key={res.id} style={{ padding: '6px 10px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: 4, display: 'flex', justifyContent: 'space-between' }}>
-                  <span>#{res.id}: {res.title} ({res.status})</span>
-                  <span style={{ color: 'var(--indigo)' }}>{res.etag}</span>
-                </div>
-              ))}
-            </div>
+          <div>
+            {responseStatus && (
+              <span className={`badge ${responseStatus >= 200 && responseStatus < 300 ? 'badge-success' : responseStatus >= 300 && responseStatus < 400 ? 'badge-indigo' : 'badge-danger'}`}>
+                HTTP {responseStatus}
+              </span>
+            )}
           </div>
         </div>
+
+        {/* Wire Protocol Terminal */}
+        <div style={{ flex: 1, background: '#0f172a', padding: 16, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ color: '#38bdf8', marginBottom: 8, fontWeight: 700 }}>Raw Network Frames:</div>
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {wireLog.length === 0 ? (
+              <div style={{ color: '#64748b' }}>// Click 'Send HTTP Request' to inspect socket communication</div>
+            ) : (
+              wireLog.map((line, idx) => (
+                <div key={idx} style={{ color: line.startsWith('>') ? '#38bdf8' : line.startsWith('< HTTP/1.1 2') ? '#34d399' : line.startsWith('< HTTP/1.1 3') ? '#818cf8' : '#e2e8f0' }}>
+                  {line}
+                </div>
+              ))
+            )}
+          </div>
+
+          {responseBody && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #334155' }}>
+              <div style={{ color: '#34d399', marginBottom: 4, fontWeight: 700 }}>Response Payload:</div>
+              <pre style={{ margin: 0, color: '#e2e8f0' }}>{responseBody}</pre>
+            </div>
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 };

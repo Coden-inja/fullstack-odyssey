@@ -1,396 +1,445 @@
 import React, { useState, useEffect } from 'react';
-import { TerminalPane, LogEntry } from '../../components/TerminalPane';
 
-interface PresetCode {
-  id: string;
-  name: string;
-  desc: string;
-  lines: string[];
+interface EventLoopLevel {
+  id: number;
+  title: string;
+  subtitle: string;
+  story: string;
+  concept: string;
+  goalDescription: string;
+  hint: string;
+  codeLines: string[];
   expectedOutput: string[];
 }
 
-const PRESETS: PresetCode[] = [
+const EVENT_LOOP_LEVELS: EventLoopLevel[] = [
   {
-    id: 'challenge-1',
-    name: 'Challenge: Fix Priority Inversion',
-    desc: 'Order microservice bug: Fix the execution so DB write runs before the audit log.',
-    lines: [
-      "console.log('[1] Sync: Validating cart');",
-      "console.log('[2] Sync: Reserving inventory');",
-      "setTimeout(() => console.log('[5] Macrotask (Timers): Audit log email dispatch'), 0);",
-      "process.nextTick(() => console.log('[3] Microtask (VIP): DB write order #8841'));",
-      "Promise.resolve().then(() => console.log('[4] Microtask: Cache warm redis'));"
+    id: 1,
+    title: 'Level 1: The Call Stack',
+    subtitle: 'Synchronous Code Runs First',
+    story: 'JavaScript is single-threaded: it can only do one thing at a time. The Call Stack is the brain’s checklist of what function is currently executing.',
+    concept: 'When a function is called, it is pushed onto the Call Stack. When it finishes returning, it is popped off. As long as synchronous code is running on the stack, no timer or promise can run.',
+    goalDescription: 'Step through the 3 synchronous lines of code to watch the Call Stack push, execute, and pop.',
+    hint: 'Click "Step Next Line" 3 times until the script completes.',
+    codeLines: [
+      "console.log('1: First synchronous step');",
+      "console.log('2: Second synchronous step');",
+      "console.log('3: Third synchronous step');"
     ],
     expectedOutput: [
-      "[1] Sync: Validating cart",
-      "[2] Sync: Reserving inventory",
-      "[3] Microtask (VIP): DB write order #8841",
-      "[4] Microtask: Cache warm redis",
-      "[5] Macrotask (Timers): Audit log email dispatch"
+      '1: First synchronous step',
+      '2: Second synchronous step',
+      '3: Third synchronous step'
     ]
   },
   {
-    id: 'deep-dive-libuv',
-    name: 'libuv Threadpool & IO Poll',
-    desc: 'See how CPU-bound crypto tasks offload to libuv C++ threads while the main V8 thread continues.',
-    lines: [
+    id: 2,
+    title: 'Level 2: Promises vs Timers',
+    subtitle: 'Microtasks Jump Ahead of Timers',
+    story: 'Why does Promise.then() always run before setTimeout(..., 0), even when the timer is set to zero milliseconds?',
+    concept: 'JavaScript has two queues: Microtasks (Promises) and Macrotasks (Timers). The golden rule of the event loop: whenever the Call Stack empties, it drains ALL microtasks before touching any timer.',
+    goalDescription: 'Run the code and observe how the Promise callback executes before the setTimeout callback.',
+    hint: 'Step through the code line by line to watch the Promise queue drain before the Timer queue.',
+    codeLines: [
       "console.log('1: Synchronous start');",
-      "crypto.pbkdf2('pass', 'salt', 100000, 64, 'sha512', () => console.log('4: libuv thread crypto done'));",
-      "setTimeout(() => console.log('3: setTimeout macrotask'), 0);",
-      "process.nextTick(() => console.log('2: nextTick microtask'));"
+      "setTimeout(() => console.log('3: setTimeout callback'), 0);",
+      "Promise.resolve().then(() => console.log('2: Promise microtask'));"
     ],
     expectedOutput: [
-      "1: Synchronous start",
-      "2: nextTick microtask",
-      "3: setTimeout macrotask",
-      "4: libuv thread crypto done"
+      '1: Synchronous start',
+      '2: Promise microtask',
+      '3: setTimeout callback'
+    ]
+  },
+  {
+    id: 3,
+    title: 'Level 3: The VIP Fast-Lane',
+    subtitle: 'process.nextTick Has Highest Priority',
+    story: 'Node.js has a special function called process.nextTick(). It acts like a VIP pass that cuts in front of even standard Promises.',
+    concept: 'process.nextTick callbacks are queued in a priority microtask queue. When the Call Stack empties, Node drains nextTick callbacks first, then Promise jobs, and only then moves to timers.',
+    goalDescription: 'Observe nextTick execute before the Promise and Timer.',
+    hint: 'Click "Step Next Line" or "Show Solution" to watch nextTick take priority.',
+    codeLines: [
+      "setTimeout(() => console.log('4: Timer callback'), 0);",
+      "Promise.resolve().then(() => console.log('3: Promise callback'));",
+      "process.nextTick(() => console.log('2: nextTick VIP callback'));",
+      "console.log('1: Synchronous end of script');"
+    ],
+    expectedOutput: [
+      '1: Synchronous end of script',
+      '2: nextTick VIP callback',
+      '3: Promise callback',
+      '4: Timer callback'
+    ]
+  },
+  {
+    id: 4,
+    title: 'Level 4: Background Worker Threads',
+    subtitle: 'How Node.js Offloads Heavy Work',
+    story: 'If JavaScript only has one thread, how can a web server hash passwords or compress files without freezing for all other users?',
+    concept: 'Node.js delegates CPU-heavy tasks (like crypto and compression) to a background pool of C++ worker threads. The main JavaScript thread stays completely free to respond to other requests.',
+    goalDescription: 'Watch Worker Thread 1 handle the crypto task while the main thread completes without freezing.',
+    hint: 'Step through to watch the crypto task move to Worker 1, and its callback return when finished.',
+    codeLines: [
+      "console.log('1: Main thread starts');",
+      "crypto.hashPassword('secret', () => console.log('4: Password hashed by worker'));",
+      "process.nextTick(() => console.log('2: nextTick callback'));",
+      "console.log('3: Main thread ready for requests');"
+    ],
+    expectedOutput: [
+      '1: Main thread starts',
+      '3: Main thread ready for requests',
+      '2: nextTick callback',
+      '4: Password hashed by worker'
     ]
   }
 ];
 
 export const EventLoopLab: React.FC = () => {
-  const [selectedPreset, setSelectedPreset] = useState<PresetCode>(PRESETS[0]);
-  const [currentLineIdx, setCurrentLineIdx] = useState<number>(-1);
+  const [levelIdx, setLevelIdx] = useState<number>(0);
+  const currentLevel = EVENT_LOOP_LEVELS[levelIdx];
+
+  const [activeLine, setActiveLine] = useState<number>(-1);
   const [callStack, setCallStack] = useState<string[]>([]);
-  const [nextTickQueue, setNextTickQueue] = useState<string[]>([]);
-  const [promiseQueue, setPromiseQueue] = useState<string[]>([]);
-  const [timersQueue, setTimersQueue] = useState<string[]>([]);
-  const [libuvPool, setLibuvPool] = useState<string[]>([
-    'Worker 1: Idle',
-    'Worker 2: Idle',
-    'Worker 3: Idle',
-    'Worker 4: Idle'
-  ]);
+  const [microtasks, setMicrotasks] = useState<string[]>([]);
+  const [timers, setTimers] = useState<string[]>([]);
+  const [workers, setWorkers] = useState<string[]>(['Worker 1: Idle', 'Worker 2: Idle', 'Worker 3: Idle', 'Worker 4: Idle']);
   const [stdout, setStdout] = useState<string[]>([]);
-  const [currentPhase, setCurrentPhase] = useState<string>('Idle (Awaiting Start)');
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { id: '1', type: 'system', text: 'V8 Isolate & libuv 1.48.0 threadpool ready.' },
-    { id: '2', type: 'output', text: 'Challenge loaded: Step through code or run all to verify STDOUT order.' }
-  ]);
+  const [showHint, setShowHint] = useState<boolean>(false);
+  const [levelWon, setLevelWon] = useState<boolean>(false);
 
-  // Load completion status from localStorage
   useEffect(() => {
+    resetLevel(levelIdx);
+  }, [levelIdx]);
+
+  useEffect(() => {
+    // Check win condition: stdout matches expected output
+    if (!levelWon && stdout.length === currentLevel.expectedOutput.length) {
+      const match = stdout.every((line, idx) => line === currentLevel.expectedOutput[idx]);
+      if (match) {
+        setLevelWon(true);
+        saveModuleCompletion();
+      }
+    }
+  }, [stdout, levelWon, currentLevel]);
+
+  const saveModuleCompletion = () => {
     try {
       const saved = localStorage.getItem('odyssey_completed_modules');
-      if (saved && JSON.parse(saved).includes('event-loop')) {
-        setIsCompleted(true);
-      }
-    } catch {}
-  }, []);
-
-  const resetState = (preset = selectedPreset) => {
-    setCurrentLineIdx(-1);
-    setCallStack([]);
-    setNextTickQueue([]);
-    setPromiseQueue([]);
-    setTimersQueue([]);
-    setLibuvPool(['Worker 1: Idle', 'Worker 2: Idle', 'Worker 3: Idle', 'Worker 4: Idle']);
-    setStdout([]);
-    setCurrentPhase('Idle (Awaiting Start)');
-    setLogs([
-      { id: Date.now().toString(), type: 'system', text: `Loaded preset: ${preset.name}` }
-    ]);
-  };
-
-  const handleStep = () => {
-    // Stage 1: Step through synchronous script lines
-    if (currentLineIdx < selectedPreset.lines.length - 1) {
-      const nextIdx = currentLineIdx + 1;
-      setCurrentLineIdx(nextIdx);
-      const line = selectedPreset.lines[nextIdx];
-
-      if (line.includes("console.log('[1]") || line.includes("console.log('[2]") || line.includes("1: Synchronous")) {
-        const text = line.split("console.log('")[1].split("')")[0];
-        setCallStack(['console.log()']);
-        setCurrentPhase('Synchronous Execution (Call Stack)');
-        setStdout(p => [...p, text]);
-        setLogs(p => [...p, { id: Date.now().toString(), type: 'success', text: `STDOUT: ${text}` }]);
-        setTimeout(() => setCallStack([]), 400);
-      } else if (line.includes('setTimeout')) {
-        const text = line.includes('[5]') ? '[5] Macrotask (Timers): Audit log email dispatch' : '3: setTimeout macrotask';
-        setCallStack(['setTimeout()']);
-        setTimersQueue(p => [...p, text]);
-        setCurrentPhase('Timers Registration (Min-Heap)');
-        setLogs(p => [...p, { id: Date.now().toString(), type: 'output', text: 'libuv: Timer registered in min-heap (0ms delay). Scheduled to Macrotask queue.' }]);
-        setTimeout(() => setCallStack([]), 400);
-      } else if (line.includes('process.nextTick')) {
-        const text = line.includes('[3]') ? '[3] Microtask (VIP): DB write order #8841' : '2: nextTick microtask';
-        setCallStack(['process.nextTick()']);
-        setNextTickQueue(p => [...p, text]);
-        setCurrentPhase('nextTickQueue (Preempts Promises)');
-        setLogs(p => [...p, { id: Date.now().toString(), type: 'output', text: 'process.nextTickQueue: Interjected with highest microtask priority.' }]);
-        setTimeout(() => setCallStack([]), 400);
-      } else if (line.includes('Promise.resolve')) {
-        const text = '[4] Microtask: Cache warm redis';
-        setCallStack(['Promise.resolve().then()']);
-        setPromiseQueue(p => [...p, text]);
-        setCurrentPhase('Promise Microtask Queue');
-        setLogs(p => [...p, { id: Date.now().toString(), type: 'output', text: 'V8 Promise: Resolved. Callback queued in PromiseJobs microtask queue.' }]);
-        setTimeout(() => setCallStack([]), 400);
-      } else if (line.includes('crypto.pbkdf2')) {
-        setCallStack(['crypto.pbkdf2()']);
-        setLibuvPool(['Worker 1: Hashing SHA-512 (Active)', 'Worker 2: Idle', 'Worker 3: Idle', 'Worker 4: Idle']);
-        setCurrentPhase('libuv Worker Pool Offload');
-        setLogs(p => [...p, { id: Date.now().toString(), type: 'system', text: 'libuv: CPU-intensive crypto task dispatched to Worker Thread 1.' }]);
-        setTimeout(() => setCallStack([]), 400);
-      }
-      return;
-    }
-
-    // Stage 2: Synchronous execution done. Drain microtasks first!
-    if (nextTickQueue.length > 0) {
-      const item = nextTickQueue[0];
-      setNextTickQueue(nextTickQueue.slice(1));
-      setCallStack([item]);
-      setCurrentPhase('Draining process.nextTick Queue (VIP)');
-      setStdout(p => [...p, item]);
-      setLogs(p => [...p, { id: Date.now().toString(), type: 'success', text: `STDOUT: ${item}` }]);
-      setTimeout(() => setCallStack([]), 400);
-      return;
-    }
-
-    if (promiseQueue.length > 0) {
-      const item = promiseQueue[0];
-      setPromiseQueue(promiseQueue.slice(1));
-      setCallStack([item]);
-      setCurrentPhase('Draining Promise Microtask Queue');
-      setStdout(p => [...p, item]);
-      setLogs(p => [...p, { id: Date.now().toString(), type: 'success', text: `STDOUT: ${item}` }]);
-      setTimeout(() => setCallStack([]), 400);
-      return;
-    }
-
-    // Stage 3: Microtasks drained. Event loop moves to Timers phase!
-    if (timersQueue.length > 0) {
-      const item = timersQueue[0];
-      setTimersQueue(timersQueue.slice(1));
-      setCallStack([item]);
-      setCurrentPhase('Event Loop Tick: Timers Phase (Macrotask)');
-      setStdout(p => [...p, item]);
-      setLogs(p => [...p, { id: Date.now().toString(), type: 'success', text: `STDOUT: ${item}` }]);
-      setTimeout(() => setCallStack([]), 400);
-      return;
-    }
-
-    // Stage 4: libuv worker completes
-    if (libuvPool[0].includes('Active')) {
-      setLibuvPool(['Worker 1: Idle', 'Worker 2: Idle', 'Worker 3: Idle', 'Worker 4: Idle']);
-      const text = '4: libuv thread crypto done';
-      setStdout(p => [...p, text]);
-      setCallStack([text]);
-      setCurrentPhase('libuv IO Callback Phase');
-      setLogs(p => [...p, { id: Date.now().toString(), type: 'success', text: `STDOUT: ${text}` }]);
-      setTimeout(() => setCallStack([]), 400);
-      return;
-    }
-
-    setCurrentPhase('Event Loop Idle / All Queues Drained');
-    setLogs(p => [...p, { id: Date.now().toString(), type: 'system', text: 'All tasks completed. Event loop enters idle poll wait.' }]);
-  };
-
-  const handleRunAll = () => {
-    resetState();
-    let currentLogs: string[] = [];
-    const expected = selectedPreset.expectedOutput;
-
-    expected.forEach((line, idx) => {
-      setTimeout(() => {
-        setStdout(p => [...p, line]);
-        setLogs(p => [...p, { id: Date.now().toString(), type: 'success', text: `STDOUT: ${line}` }]);
-        if (idx === expected.length - 1) {
-          setCurrentPhase('Execution Completed');
-        }
-      }, (idx + 1) * 300);
-    });
-  };
-
-  const markModuleCompleted = () => {
-    try {
-      const saved = localStorage.getItem('odyssey_completed_modules');
-      const list: string[] = saved ? JSON.parse(saved) : [];
+      const list = saved ? JSON.parse(saved) : [];
       if (!list.includes('event-loop')) {
         list.push('event-loop');
         localStorage.setItem('odyssey_completed_modules', JSON.stringify(list));
       }
-      setIsCompleted(true);
-      setLogs(p => [...p, { id: Date.now().toString(), type: 'success', text: '🏆 Module 01 Marked as Completed! Progress saved.' }]);
     } catch {}
   };
 
-  const isOutputValid = stdout.length === selectedPreset.expectedOutput.length &&
-    stdout.every((val, i) => val === selectedPreset.expectedOutput[i]);
+  const resetLevel = (idx: number) => {
+    setActiveLine(-1);
+    setCallStack([]);
+    setMicrotasks([]);
+    setTimers([]);
+    setWorkers(['Worker 1: Idle', 'Worker 2: Idle', 'Worker 3: Idle', 'Worker 4: Idle']);
+    setStdout([]);
+    setShowHint(false);
+    setLevelWon(false);
+  };
+
+  const stepNext = () => {
+    // Phase 1: Step through lines of code
+    if (activeLine < currentLevel.codeLines.length - 1) {
+      const nextLineIdx = activeLine + 1;
+      setActiveLine(nextLineIdx);
+      const code = currentLevel.codeLines[nextLineIdx];
+
+      if (code.includes('console.log') && !code.includes('=>')) {
+        const text = code.match(/console\.log\(['"]([^'"]+)['"]\)/)?.[1] || '';
+        setCallStack([code]);
+        setTimeout(() => {
+          setStdout(prev => [...prev, text]);
+          setCallStack([]);
+        }, 300);
+      } else if (code.includes('setTimeout')) {
+        const text = code.match(/console\.log\(['"]([^'"]+)['"]\)/)?.[1] || '';
+        setCallStack(['setTimeout(...)']);
+        setTimers(prev => [...prev, text]);
+        setTimeout(() => setCallStack([]), 300);
+      } else if (code.includes('Promise.resolve')) {
+        const text = code.match(/console\.log\(['"]([^'"]+)['"]\)/)?.[1] || '';
+        setCallStack(['Promise.resolve().then(...)']);
+        setMicrotasks(prev => [...prev, text]);
+        setTimeout(() => setCallStack([]), 300);
+      } else if (code.includes('process.nextTick')) {
+        const text = code.match(/console\.log\(['"]([^'"]+)['"]\)/)?.[1] || '';
+        setCallStack(['process.nextTick(...)']);
+        setMicrotasks(prev => [text, ...prev]); // Prepend VIP
+        setTimeout(() => setCallStack([]), 300);
+      } else if (code.includes('crypto.hashPassword')) {
+        setCallStack(['crypto.hashPassword(...)']);
+        setWorkers(['Worker 1: Hashing password...', 'Worker 2: Idle', 'Worker 3: Idle', 'Worker 4: Idle']);
+        setTimeout(() => setCallStack([]), 300);
+      }
+      return;
+    }
+
+    // Phase 2: Drain microtasks
+    if (microtasks.length > 0) {
+      const [first, ...rest] = microtasks;
+      setCallStack([`Microtask: ${first}`]);
+      setMicrotasks(rest);
+      setTimeout(() => {
+        setStdout(prev => [...prev, first]);
+        setCallStack([]);
+      }, 300);
+      return;
+    }
+
+    // Phase 3: Drain timers
+    if (timers.length > 0) {
+      const [first, ...rest] = timers;
+      setCallStack([`Timer: ${first}`]);
+      setTimers(rest);
+      setTimeout(() => {
+        setStdout(prev => [...prev, first]);
+        setCallStack([]);
+      }, 300);
+      return;
+    }
+
+    // Phase 4: Drain background worker task
+    if (workers[0].includes('Hashing')) {
+      setWorkers(['Worker 1: Done', 'Worker 2: Idle', 'Worker 3: Idle', 'Worker 4: Idle']);
+      const text = '4: Password hashed by worker';
+      setCallStack([`Worker Callback: ${text}`]);
+      setTimeout(() => {
+        setStdout(prev => [...prev, text]);
+        setCallStack([]);
+      }, 300);
+    }
+  };
+
+  const autoPlaySolution = () => {
+    resetLevel(levelIdx);
+    let stepCount = 0;
+    const maxSteps = currentLevel.codeLines.length + 3;
+    const interval = setInterval(() => {
+      stepNext();
+      stepCount++;
+      if (stepCount >= maxSteps) {
+        clearInterval(interval);
+      }
+    }, 600);
+  };
 
   return (
-    <>
-      {/* Left Column: Code, Controls, Quest Lore */}
-      <div className="lab-panel-left">
-        {/* Story Lore Card */}
-        <div className="lab-card" style={{ borderLeft: '3px solid var(--indigo)' }}>
-          <div className="lab-card-title">
-            <span>Engineering Storyline</span>
-            <span className="badge badge-indigo">Priority Inversion</span>
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            You are debugging an asynchronous checkout race condition. An audit log was scheduled via <code>setTimeout(cb, 0)</code>, 
-            while the database write ran in <code>process.nextTick</code>. Step through the execution to understand why 
-            <strong> microtasks drain completely before any macrotask can execute a single frame</strong>.
-          </p>
+    <div className="lab-split-container">
+      {/* LEFT PANEL: Guided Lesson */}
+      <div className="guide-panel">
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {EVENT_LOOP_LEVELS.map((lvl, idx) => (
+            <button
+              key={lvl.id}
+              className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setLevelIdx(idx)}
+            >
+              Level {lvl.id}
+            </button>
+          ))}
         </div>
 
-        {/* Code Editor */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>JavaScript Execution Script</span>
-            <span className="badge">
-              {currentLineIdx >= 0 && currentLineIdx < selectedPreset.lines.length
-                ? `Line ${currentLineIdx + 1} / ${selectedPreset.lines.length}`
-                : 'Ready'}
-            </span>
-          </div>
-
-          <div className="code-preview-box">
-            {selectedPreset.lines.map((l, i) => (
-              <div key={i} className={`code-line ${currentLineIdx === i ? 'active' : ''}`}>
-                <span style={{ color: 'var(--text-dim)', marginRight: 12 }}>{i + 1}</span>
-                {l}
+        <div className="lesson-card" style={{ marginBottom: 0 }}>
+          <div className="lesson-step-header">
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+                {currentLevel.subtitle}
               </div>
-            ))}
+              <h2 className="lesson-step-title">{currentLevel.title}</h2>
+            </div>
+            {levelWon && <span className="badge badge-success">Passed</span>}
           </div>
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-            <button className="btn btn-primary" onClick={handleStep}>
-              ▶ Step Instruction
+          <p className="lesson-explanation">{currentLevel.story}</p>
+
+          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
+            {currentLevel.concept}
+          </div>
+
+          <div className="lesson-goal-box">
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
+              <div>{currentLevel.goalDescription}</div>
+            </div>
+          </div>
+
+          <div className="lesson-actions">
+            <button className="btn btn-primary btn-sm" onClick={stepNext}>
+              Step Next Line →
             </button>
-            <button className="btn btn-secondary" onClick={handleRunAll}>
-              ⚡ Run to Completion
+            <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
+              {showHint ? 'Hide Hint' : 'Need a Hint?'}
             </button>
-            <button className="btn btn-secondary" onClick={() => resetState()}>
-              ↺ Reset
+            <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
+              Show Solution
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
+              Reset
             </button>
           </div>
+
+          {showHint && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
+              <strong>Hint: </strong>{currentLevel.hint}
+            </div>
+          )}
         </div>
 
-        {/* Quest Completion Card */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>Quest Validation Status</span>
-            <span className={`badge ${isCompleted ? 'badge-emerald' : isOutputValid ? 'badge-indigo' : ''}`}>
-              {isCompleted ? '✓ Completed' : isOutputValid ? 'Target Order Achieved' : 'Incomplete'}
-            </span>
+        {levelWon && (
+          <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: 14, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontWeight: 700, color: 'var(--success)' }}>Level Completed!</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>You mastered how this queue behaves.</div>
+            </div>
+            {levelIdx < EVENT_LOOP_LEVELS.length - 1 ? (
+              <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)}>
+                Next Level →
+              </button>
+            ) : (
+              <span className="badge badge-success">Module Mastered!</span>
+            )}
           </div>
+        )}
 
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
-            Output matches target execution sequence: <strong>{isOutputValid ? 'YES (Valid)' : 'Awaiting Full Run'}</strong>
-          </p>
-
-          <button
-            className={`btn ${isCompleted ? 'btn-success' : isOutputValid ? 'btn-primary' : 'btn-secondary'}`}
-            disabled={!isOutputValid}
-            onClick={markModuleCompleted}
-            style={{ width: '100%', justifyContent: 'center' }}
-          >
-            {isCompleted ? '✓ Module 01 Mastered (Completed)' : 'Mark Module as Done →'}
-          </button>
+        {/* Code Block Inspector */}
+        <div style={{ background: '#0f172a', padding: 16, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc' }}>
+          <div style={{ color: '#94a3b8', marginBottom: 8, fontWeight: 600 }}>JavaScript Source:</div>
+          {currentLevel.codeLines.map((line, idx) => (
+            <div 
+              key={idx} 
+              style={{ 
+                padding: '3px 6px', 
+                borderRadius: 4, 
+                background: activeLine === idx ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+                color: activeLine === idx ? '#38bdf8' : '#e2e8f0',
+                borderLeft: activeLine === idx ? '3px solid #38bdf8' : '3px solid transparent'
+              }}
+            >
+              {line}
+            </div>
+          ))}
         </div>
-
-        <TerminalPane logs={logs} title="V8 / libuv Diagnostic Traces" />
       </div>
 
-      {/* Right Column: Visual Queues & State Machine */}
-      <div className="lab-panel-right">
-        <div className="canvas-card">
-          <div className="lab-card-title">
-            <span>libuv Asynchronous Architecture</span>
-            <span className="badge badge-emerald">Current Phase: {currentPhase}</span>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14, marginBottom: 20 }}>
-            {/* V8 Call Stack */}
-            <div className="lab-card" style={{ background: '#040711' }}>
-              <strong style={{ fontSize: 13, color: 'var(--indigo)' }}>V8 Call Stack (LIFO)</strong>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, minHeight: 90 }}>
-                {callStack.length === 0 ? <p style={{ color: 'var(--text-dim)', fontSize: 12 }}>[Empty / Main Thread Free]</p> : (
-                  callStack.map((f, i) => (
-                    <div key={i} style={{ padding: '8px 10px', background: 'rgba(99, 102, 241, 0.2)', borderLeft: '3px solid var(--indigo)', borderRadius: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-                      {f}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* process.nextTick Queue */}
-            <div className="lab-card" style={{ background: '#040711' }}>
-              <strong style={{ fontSize: 13, color: 'var(--rose)' }}>process.nextTick Queue (VIP)</strong>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, minHeight: 90 }}>
-                {nextTickQueue.length === 0 ? <p style={{ color: 'var(--text-dim)', fontSize: 12 }}>[Empty]</p> : (
-                  nextTickQueue.map((m, i) => (
-                    <div key={i} style={{ padding: '8px 10px', background: 'rgba(244, 63, 94, 0.15)', borderLeft: '3px solid var(--rose)', borderRadius: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-                      {m}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Promise Microtask Queue */}
-            <div className="lab-card" style={{ background: '#040711' }}>
-              <strong style={{ fontSize: 13, color: 'var(--amber)' }}>PromiseJobs Queue (Microtasks)</strong>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, minHeight: 90 }}>
-                {promiseQueue.length === 0 ? <p style={{ color: 'var(--text-dim)', fontSize: 12 }}>[Empty]</p> : (
-                  promiseQueue.map((m, i) => (
-                    <div key={i} style={{ padding: '8px 10px', background: 'rgba(245, 158, 11, 0.15)', borderLeft: '3px solid var(--amber)', borderRadius: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-                      {m}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Macrotask Timers Queue */}
-            <div className="lab-card" style={{ background: '#040711' }}>
-              <strong style={{ fontSize: 13, color: 'var(--cyan)' }}>Timers Queue (Macrotasks)</strong>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, minHeight: 90 }}>
-                {timersQueue.length === 0 ? <p style={{ color: 'var(--text-dim)', fontSize: 12 }}>[Empty]</p> : (
-                  timersQueue.map((m, i) => (
-                    <div key={i} style={{ padding: '8px 10px', background: 'rgba(6, 182, 212, 0.15)', borderLeft: '3px solid var(--cyan)', borderRadius: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-                      {m}
-                    </div>
-                  ))
-                )}
-              </div>
+      {/* RIGHT PANEL: Live Event Loop Visualizer */}
+      <div className="canvas-panel">
+        <div className="canvas-header">
+          <div>
+            <div className="canvas-title">Event Loop Engine</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Watch frames push to the stack and callbacks drain from their respective queues.
             </div>
           </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <span className="badge badge-indigo">V8 Single Thread</span>
+            <span className="badge">libuv 4-Thread Pool</span>
+          </div>
+        </div>
 
-          {/* libuv Worker Threads & Realtime STDOUT */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
-            <div className="lab-card" style={{ background: '#040711' }}>
-              <strong style={{ fontSize: 13, color: 'var(--purple)' }}>libuv C++ Worker Pool (4 Threads)</strong>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
-                {libuvPool.map((w, i) => (
-                  <div key={i} style={{ padding: '6px 10px', background: w.includes('Active') ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255, 255, 255, 0.02)', borderLeft: `3px solid ${w.includes('Active') ? 'var(--purple)' : 'var(--text-dim)'}`, borderRadius: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-                    {w}
+        {/* Visual Queues Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, flex: 1 }}>
+          {/* Call Stack */}
+          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--primary)', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Call Stack (Executing)</span>
+              <span className="badge">{callStack.length} Frame</span>
+            </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column-reverse', gap: 6, background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 6, padding: 8, minHeight: 120 }}>
+              {callStack.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', textAlign: 'center', margin: 'auto' }}>
+                  Stack Empty (Idle)
+                </div>
+              ) : (
+                callStack.map((frame, idx) => (
+                  <div key={idx} style={{ background: 'var(--primary-light)', border: '1px solid var(--primary-border)', padding: '6px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600, color: 'var(--primary)' }}>
+                    {frame}
                   </div>
-                ))}
-              </div>
+                ))
+              )}
             </div>
+          </div>
 
-            <div className="lab-card" style={{ background: '#040711' }}>
-              <strong style={{ fontSize: 13, color: 'var(--emerald)' }}>STDOUT Execution Stream</strong>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10, fontFamily: 'var(--font-mono)', fontSize: 11 }}>
-                {stdout.length === 0 ? <p style={{ color: 'var(--text-dim)' }}>[No output emitted yet]</p> : (
-                  stdout.map((out, i) => (
-                    <div key={i} style={{ color: 'var(--emerald)' }}>
-                      → {out}
-                    </div>
-                  ))
-                )}
-              </div>
+          {/* Microtasks Queue */}
+          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: '#059669', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Microtasks (Promises / VIP)</span>
+              <span className="badge badge-success">{microtasks.length}</span>
+            </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 6, padding: 8, minHeight: 120 }}>
+              {microtasks.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', textAlign: 'center', margin: 'auto' }}>
+                  Queue Drained
+                </div>
+              ) : (
+                microtasks.map((task, idx) => (
+                  <div key={idx} style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: '6px 10px', borderRadius: 4, fontSize: 12, fontWeight: 500, color: 'var(--success)' }}>
+                    {task}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Timers Queue */}
+          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: '#d97706', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Timers (Macrotasks)</span>
+              <span className="badge badge-warning">{timers.length}</span>
+            </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 6, padding: 8, minHeight: 120 }}>
+              {timers.length === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text-dim)', textAlign: 'center', margin: 'auto' }}>
+                  No Timers Waiting
+                </div>
+              ) : (
+                timers.map((timer, idx) => (
+                  <div key={idx} style={{ background: 'var(--warning-light)', border: '1px solid var(--warning-border)', padding: '6px 10px', borderRadius: 4, fontSize: 12, fontWeight: 500, color: '#92400e' }}>
+                    {timer}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Background Worker Threads */}
+          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--text-main)', display: 'flex', justifyContent: 'space-between' }}>
+              <span>libuv Worker Pool</span>
+              <span className="badge">4 Threads</span>
+            </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 6, padding: 8, minHeight: 120 }}>
+              {workers.map((w, idx) => (
+                <div key={idx} style={{ padding: '6px 10px', borderRadius: 4, fontSize: 12, background: w.includes('Hashing') ? '#fee2e2' : 'var(--bg-subtle)', color: w.includes('Hashing') ? '#991b1b' : 'var(--text-muted)', fontWeight: w.includes('Hashing') ? 700 : 500 }}>
+                  {w}
+                </div>
+              ))}
             </div>
           </div>
         </div>
+
+        {/* Terminal Standard Output */}
+        <div style={{ marginTop: 16, background: '#0f172a', padding: 14, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc' }}>
+          <div style={{ color: '#94a3b8', marginBottom: 6, fontWeight: 600 }}>STDOUT (Console Output):</div>
+          {stdout.length === 0 ? (
+            <div style={{ color: '#64748b' }}>Waiting for execution output...</div>
+          ) : (
+            stdout.map((line, idx) => (
+              <div key={idx} style={{ color: '#38bdf8' }}>
+                &gt; {line}
+              </div>
+            ))
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 };

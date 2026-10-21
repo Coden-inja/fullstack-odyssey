@@ -1,147 +1,87 @@
 import React, { useState, useEffect } from 'react';
-import { TerminalPane, LogEntry } from '../../components/TerminalPane';
 
 interface QueueJob {
   id: string;
   name: string;
-  priority: 'CRITICAL' | 'NORMAL';
+  status: 'waiting' | 'active' | 'completed' | 'failed' | 'dlq';
   attempts: number;
   maxAttempts: number;
-  payload: Record<string, any>;
-  state: 'waiting' | 'active' | 'retrying' | 'completed' | 'failed_dlq';
-  error?: string;
-  workerId?: number;
+  isPoisonPill?: boolean;
 }
 
+interface RedisQueueLevel {
+  id: number;
+  title: string;
+  subtitle: string;
+  story: string;
+  concept: string;
+  goalDescription: string;
+  hint: string;
+  targetState: string;
+}
+
+const REDIS_LEVELS: RedisQueueLevel[] = [
+  {
+    id: 1,
+    title: 'Level 1: Offloading Slow Work',
+    subtitle: 'Why Web Servers Use Queues',
+    story: 'Sending a confirmation email or generating a receipt PDF takes 3 seconds. If your web server waits for that to finish, users are stuck staring at a frozen browser.',
+    concept: 'Instead of doing the slow work on the web thread, the server puts a job into a Redis Queue and responds to the user instantly! A background worker pulls the job and finishes it asynchronously.',
+    goalDescription: 'Click "Enqueue Welcome Emails" and watch Worker 1 and Worker 2 pull jobs from Waiting to Completed.',
+    hint: 'Click "Enqueue Welcome Emails" to start processing.',
+    targetState: 'completed_all'
+  },
+  {
+    id: 2,
+    title: 'Level 2: Scaling Concurrency',
+    subtitle: 'Processing Multiple Tasks in Parallel',
+    story: 'Your newsletter campaign is launching and 8 emails need to go out immediately. With only 1 worker, they finish one by one.',
+    concept: 'Worker concurrency allows multiple tasks to be processed at the exact same moment. Setting concurrency to 4 allows 4 background jobs to run simultaneously.',
+    goalDescription: 'Set Worker Concurrency to 4 and click "Process Batch" to watch 4 jobs process in parallel.',
+    hint: 'Set concurrency to 4 and process the batch.',
+    targetState: 'parallel_4'
+  },
+  {
+    id: 3,
+    title: 'Level 3: The Dead Letter Queue (DLQ)',
+    subtitle: 'Stopping Poison Pills from Freezing Workers',
+    story: 'What happens if a job has a corrupt payload that always crashes the worker? If the worker keeps retrying forever in an infinite loop, no other work gets done.',
+    concept: 'A Dead Letter Queue (DLQ) is a safety quarantine. If a job fails 3 times, the queue acknowledges it and moves it into the DLQ so developers can inspect the error while normal jobs keep flowing.',
+    goalDescription: 'Enqueue a Broken Job (Poison Pill), watch it fail its 3 retry attempts, and see it quarantined in the DLQ.',
+    hint: 'Click "Enqueue Poison Pill" and watch it move to the DLQ after 3 failed attempts.',
+    targetState: 'dlq_quarantine'
+  }
+];
+
 export const RedisQueuesLab: React.FC = () => {
-  const [jobs, setJobs] = useState<QueueJob[]>([
-    {
-      id: 'job_4891',
-      name: 'stripe.charge_card',
-      priority: 'CRITICAL',
-      attempts: 0,
-      maxAttempts: 3,
-      payload: { customer: 'cus_99', amount: '$499.00' },
-      state: 'waiting'
-    },
-    {
-      id: 'job_4892',
-      name: 'video.transcode_1080p',
-      priority: 'NORMAL',
-      attempts: 0,
-      maxAttempts: 3,
-      payload: { s3_key: 'uploads/demo.mov', codec: 'h264' },
-      state: 'waiting'
-    },
-    {
-      id: 'job_4893',
-      name: 'email.dispatch_welcome',
-      priority: 'NORMAL',
-      attempts: 0,
-      maxAttempts: 3,
-      payload: { to: 'alex@enterprise.com' },
-      state: 'waiting'
-    }
-  ]);
+  const [levelIdx, setLevelIdx] = useState<number>(0);
+  const currentLevel = REDIS_LEVELS[levelIdx];
 
-  const [workerCount, setWorkerCount] = useState<number>(3);
-  const [isProcessingLoop, setIsProcessingLoop] = useState<boolean>(false);
-  const [isCompleted, setIsCompleted] = useState<boolean>(false);
-
-  // Challenge tracking
-  const [achievedConcurrency, setAchievedConcurrency] = useState<boolean>(false);
-  const [achievedDlqQuarantine, setAchievedDlqQuarantine] = useState<boolean>(false);
-  const [achievedRedrive, setAchievedRedrive] = useState<boolean>(false);
-
-  const [logs, setLogs] = useState<LogEntry[]>([
-    { id: '1', type: 'system', text: 'BullMQ 5.8 / Redis 7.2 cluster online. Streams group "enterprise-workers" established.' },
-    { id: '2', type: 'output', text: 'Ready to produce jobs, dispatch workers, and simulate network partitions.' }
-  ]);
+  const [jobs, setJobs] = useState<QueueJob[]>([]);
+  const [concurrency, setConcurrency] = useState<number>(2);
+  const [showHint, setShowHint] = useState<boolean>(false);
+  const [levelWon, setLevelWon] = useState<boolean>(false);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('odyssey_completed_modules');
-      if (saved && JSON.parse(saved).includes('redis-queues')) {
-        setIsCompleted(true);
+    resetLevel(levelIdx);
+  }, [levelIdx]);
+
+  useEffect(() => {
+    if (!levelWon) {
+      if (currentLevel.id === 1 && jobs.length >= 3 && jobs.every(j => j.status === 'completed')) {
+        setLevelWon(true);
+        saveModuleCompletion();
+      } else if (currentLevel.id === 2 && concurrency === 4 && jobs.filter(j => j.status === 'completed').length >= 4) {
+        setLevelWon(true);
+        saveModuleCompletion();
+      } else if (currentLevel.id === 3 && jobs.some(j => j.status === 'dlq')) {
+        setLevelWon(true);
+        saveModuleCompletion();
       }
-    } catch {}
-  }, []);
+    }
+  }, [jobs, concurrency, levelWon, currentLevel]);
 
-  const addJob = (priority: 'CRITICAL' | 'NORMAL', isPoisonPill = false) => {
-    const id = `job_${Math.floor(1000 + Math.random() * 9000)}`;
-    const name = isPoisonPill ? 'malformed.corrupt_chunk' : priority === 'CRITICAL' ? 'order.finalize_invoice' : 'cdn.purge_cache';
-    const newJob: QueueJob = {
-      id,
-      name,
-      priority,
-      attempts: 0,
-      maxAttempts: 3,
-      payload: { ts: Date.now(), poison: isPoisonPill },
-      state: 'waiting'
-    };
-
-    setJobs(p => [newJob, ...p]);
-    setLogs(p => [
-      ...p,
-      { id: Date.now().toString(), type: 'system', text: `Producer: XADD stream:orders ${priority === 'CRITICAL' ? 'MAXLEN ~ 1000' : ''} ${id} [${name}]` }
-    ]);
-  };
-
-  const processNextJob = () => {
-    const nextWaiting = jobs.find(j => j.state === 'waiting' || j.state === 'retrying');
-    if (!nextWaiting) return;
-
-    const assignedWorker = Math.floor(Math.random() * workerCount) + 1;
-    const isPoison = nextWaiting.payload.poison;
-
-    // Transition to Active
-    setJobs(prev => prev.map(j => j.id === nextWaiting.id ? { ...j, state: 'active', workerId: assignedWorker } : j));
-    setLogs(p => [
-      ...p,
-      { id: Date.now().toString(), type: 'output', text: `Worker #${assignedWorker}: XREADGROUP acquired Redlock on ${nextWaiting.id} (${nextWaiting.name})` }
-    ]);
-
-    setTimeout(() => {
-      if (isPoison) {
-        // Trigger retry or DLQ
-        const nextAttempts = nextWaiting.attempts + 1;
-        if (nextAttempts >= nextWaiting.maxAttempts) {
-          setJobs(prev => prev.map(j => j.id === nextWaiting.id ? { ...j, state: 'failed_dlq', attempts: nextAttempts, error: 'OOM_KILL_SIGSEGV' } : j));
-          setAchievedDlqQuarantine(true);
-          setLogs(p => [
-            ...p,
-            { id: Date.now().toString(), type: 'error', text: `Worker #${assignedWorker}: Crash processing ${nextWaiting.id}! Attempts: ${nextAttempts}/${nextWaiting.maxAttempts}.` },
-            { id: (Date.now() + 1).toString(), type: 'error', text: `🚨 QUARANTINE: Max attempts exhausted. Moved ${nextWaiting.id} to Dead Letter Queue (DLQ).` }
-          ]);
-        } else {
-          setJobs(prev => prev.map(j => j.id === nextWaiting.id ? { ...j, state: 'retrying', attempts: nextAttempts, error: `Transient network failure` } : j));
-          setLogs(p => [
-            ...p,
-            { id: Date.now().toString(), type: 'error', text: `Worker #${assignedWorker}: ${nextWaiting.id} failed! Retrying in 2^${nextAttempts}s backoff.` }
-          ]);
-        }
-      } else {
-        // Successful completion
-        setJobs(prev => prev.map(j => j.id === nextWaiting.id ? { ...j, state: 'completed', attempts: j.attempts + 1 } : j));
-        setAchievedConcurrency(true);
-        setLogs(p => [
-          ...p,
-          { id: Date.now().toString(), type: 'success', text: `Worker #${assignedWorker}: Completed ${nextWaiting.id}! XACK stream:orders consumer_group -> OK.` }
-        ]);
-      }
-    }, 600);
-  };
-
-  const redriveDlq = () => {
-    setJobs(prev => prev.map(j => j.state === 'failed_dlq' ? { ...j, state: 'waiting', attempts: 0, payload: { ...j.payload, poison: false } } : j));
-    setAchievedRedrive(true);
-    setLogs(p => [
-      ...p,
-      { id: Date.now().toString(), type: 'system', text: `DLQ Replay: Sanitized and re-injected all quarantined jobs back to waiting stream!` }
-    ]);
-  };
-
-  const markModuleCompleted = () => {
+  const saveModuleCompletion = () => {
     try {
       const saved = localStorage.getItem('odyssey_completed_modules');
       const list = saved ? JSON.parse(saved) : [];
@@ -149,216 +89,265 @@ export const RedisQueuesLab: React.FC = () => {
         list.push('redis-queues');
         localStorage.setItem('odyssey_completed_modules', JSON.stringify(list));
       }
-      setIsCompleted(true);
-      setLogs(p => [
-        ...p,
-        { id: Date.now().toString(), type: 'success', text: '✓ Module 07 (Redis Queues & Background Workers) marked as Completed in local storage!' }
-      ]);
     } catch {}
   };
 
-  const waitingJobs = jobs.filter(j => j.state === 'waiting' || j.state === 'retrying');
-  const activeJobs = jobs.filter(j => j.state === 'active');
-  const completedJobs = jobs.filter(j => j.state === 'completed');
-  const dlqJobs = jobs.filter(j => j.state === 'failed_dlq');
+  const resetLevel = (idx: number) => {
+    setJobs([]);
+    setConcurrency(idx === 1 ? 4 : 2);
+    setShowHint(false);
+    setLevelWon(false);
+  };
+
+  const enqueueNormalJobs = (count = 3) => {
+    const newJobs: QueueJob[] = [];
+    for (let i = 1; i <= count; i++) {
+      newJobs.push({
+        id: `job_${Date.now()}_${i}`,
+        name: `Send welcome email to user_${i}@example.com`,
+        status: 'waiting',
+        attempts: 0,
+        maxAttempts: 3
+      });
+    }
+    setJobs(prev => [...prev, ...newJobs]);
+
+    // Simulate worker processing
+    setTimeout(() => {
+      setJobs(prev => prev.map(j => (j.status === 'waiting' ? { ...j, status: 'active' } : j)));
+      setTimeout(() => {
+        setJobs(prev => prev.map(j => (j.status === 'active' ? { ...j, status: 'completed' } : j)));
+      }, 800);
+    }, 400);
+  };
+
+  const enqueuePoisonPill = () => {
+    const brokenJob: QueueJob = {
+      id: `job_poison_${Date.now()}`,
+      name: `Process corrupt payload #404 (Uncaught Exception)`,
+      status: 'waiting',
+      attempts: 0,
+      maxAttempts: 3,
+      isPoisonPill: true
+    };
+    setJobs(prev => [...prev, brokenJob]);
+
+    // Step 1: Active
+    setTimeout(() => {
+      setJobs(prev => prev.map(j => j.id === brokenJob.id ? { ...j, status: 'active', attempts: 1 } : j));
+
+      // Step 2: Failed attempt 1
+      setTimeout(() => {
+        setJobs(prev => prev.map(j => j.id === brokenJob.id ? { ...j, status: 'failed', attempts: 2 } : j));
+
+        // Step 3: Failed attempt 2 & move to DLQ
+        setTimeout(() => {
+          setJobs(prev => prev.map(j => j.id === brokenJob.id ? { ...j, status: 'dlq', attempts: 3 } : j));
+        }, 800);
+      }, 800);
+    }, 400);
+  };
+
+  const autoPlaySolution = () => {
+    resetLevel(levelIdx);
+    setTimeout(() => {
+      if (currentLevel.id === 1) enqueueNormalJobs(3);
+      if (currentLevel.id === 2) {
+        setConcurrency(4);
+        enqueueNormalJobs(4);
+      }
+      if (currentLevel.id === 3) enqueuePoisonPill();
+    }, 200);
+  };
+
+  const waitingJobs = jobs.filter(j => j.status === 'waiting');
+  const activeJobs = jobs.filter(j => j.status === 'active');
+  const completedJobs = jobs.filter(j => j.status === 'completed');
+  const dlqJobs = jobs.filter(j => j.status === 'dlq' || j.status === 'failed');
 
   return (
-    <>
-      <div className="lab-panel-left">
-        {/* Story Quest */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>Quest: The Poison Pill & Dead Letter Queue</span>
-            <span className="badge badge-indigo">Module 07</span>
-          </div>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            In distributed systems, background tasks must never crash worker fleets in an infinite loop.
-            A <strong>Dead Letter Queue (DLQ)</strong> isolates corrupted tasks after exponential backoff retries fail.
-          </p>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6, marginTop: 8 }}>
-            <strong>Redlock Invariant:</strong> Workers lease jobs via atomic Redis primitives (<code>XREADGROUP / BRPOPLPUSH</code>)
-            with a heartbeat TTL watchdog. If a worker dies, peer workers reclaim the lease.
-          </p>
-        </div>
-
-        {/* Producer & Worker Controls */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>BullMQ Pipeline Dispatcher</span>
-            <span className="badge badge-emerald">{workerCount} Active Workers</span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-              <button className="btn btn-primary" onClick={() => addJob('NORMAL')}>
-                + Produce Job (Normal)
-              </button>
-              <button className="btn btn-secondary" onClick={() => addJob('CRITICAL')}>
-                + Produce Job (VIP)
-              </button>
-            </div>
-
+    <div className="lab-split-container">
+      {/* LEFT PANEL: Guided Lesson */}
+      <div className="guide-panel">
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {REDIS_LEVELS.map((lvl, idx) => (
             <button
-              className="btn btn-danger"
-              onClick={() => addJob('CRITICAL', true)}
-              style={{ justifyContent: 'center' }}
+              key={lvl.id}
+              className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setLevelIdx(idx)}
             >
-              ⚠️ Inject Poison Pill Job (Simulate Crash)
+              Level {lvl.id}
             </button>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginTop: 4 }}>
-              <button
-                className="btn btn-success"
-                onClick={processNextJob}
-                disabled={waitingJobs.length === 0}
-                style={{ justifyContent: 'center' }}
-              >
-                ▶ Worker Step Next
-              </button>
-
-              <button
-                className="btn btn-secondary"
-                onClick={redriveDlq}
-                disabled={dlqJobs.length === 0}
-                style={{ justifyContent: 'center' }}
-              >
-                ↺ Replay DLQ ({dlqJobs.length})
-              </button>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 14 }}>
-            <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>Worker Fleet Concurrency: {workerCount} Pods</label>
-            <input
-              type="range"
-              min={1}
-              max={5}
-              value={workerCount}
-              onChange={(e) => setWorkerCount(parseInt(e.target.value, 10))}
-              style={{ width: '100%', marginTop: 4 }}
-            />
-          </div>
+          ))}
         </div>
 
-        {/* Challenge Mastery Card */}
-        <div className="lab-card">
-          <div className="lab-card-title">
-            <span>Distributed Queue Checklist</span>
-            <span className={`badge ${isCompleted ? 'badge-emerald' : 'badge-indigo'}`}>
-              {isCompleted ? '✓ Completed' : 'In Progress'}
-            </span>
+        <div className="lesson-card" style={{ marginBottom: 0 }}>
+          <div className="lesson-step-header">
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+                {currentLevel.subtitle}
+              </div>
+              <h2 className="lesson-step-title">{currentLevel.title}</h2>
+            </div>
+            {levelWon && <span className="badge badge-success">Passed</span>}
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedConcurrency ? '✅' : '⏳'}</span>
-              <span>Lease and successfully acknowledge (XACK) a background job</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedDlqQuarantine ? '✅' : '⏳'}</span>
-              <span>Quarantine a poison pill into Dead Letter Queue after max retries</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span>{achievedRedrive ? '✅' : '⏳'}</span>
-              <span>Replay dead-lettered jobs back into waiting queue</span>
+          <p className="lesson-explanation">{currentLevel.story}</p>
+
+          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
+            {currentLevel.concept}
+          </div>
+
+          <div className="lesson-goal-box">
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
+              <div>{currentLevel.goalDescription}</div>
             </div>
           </div>
 
-          <button
-            className={`btn ${isCompleted ? 'btn-success' : achievedConcurrency && achievedDlqQuarantine ? 'btn-primary' : 'btn-secondary'}`}
-            disabled={!achievedConcurrency || !achievedDlqQuarantine}
-            onClick={markModuleCompleted}
-            style={{ width: '100%', justifyContent: 'center' }}
-          >
-            {isCompleted ? '✓ Module 07 Mastered (Completed)' : 'Mark Module as Done →'}
-          </button>
+          {/* Concurrency Selector for Level 2 */}
+          {currentLevel.id === 2 && (
+            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Worker Concurrency:</span>
+              <button
+                className={`btn btn-sm ${concurrency === 1 ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setConcurrency(1)}
+              >
+                1 Worker
+              </button>
+              <button
+                className={`btn btn-sm ${concurrency === 4 ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setConcurrency(4)}
+              >
+                4 Workers (Parallel)
+              </button>
+            </div>
+          )}
+
+          <div className="lesson-actions">
+            {currentLevel.id !== 3 ? (
+              <button className="btn btn-primary btn-sm" onClick={() => enqueueNormalJobs(currentLevel.id === 2 ? 4 : 3)}>
+                Enqueue Jobs →
+              </button>
+            ) : (
+              <button className="btn btn-primary btn-sm" onClick={enqueuePoisonPill} style={{ background: '#dc2626' }}>
+                Enqueue Poison Pill (Corrupt Task) →
+              </button>
+            )}
+            <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
+              {showHint ? 'Hide Hint' : 'Need a Hint?'}
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
+              Show Solution
+            </button>
+            <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
+              Reset
+            </button>
+          </div>
+
+          {showHint && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
+              <strong>Hint: </strong>{currentLevel.hint}
+            </div>
+          )}
         </div>
 
-        <TerminalPane logs={logs} title="Redis Consumer Group Event Stream" />
+        {levelWon && (
+          <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: 14, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontWeight: 700, color: 'var(--success)' }}>Level Completed!</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>You mastered background queue state machines and DLQs.</div>
+            </div>
+            {levelIdx < REDIS_LEVELS.length - 1 ? (
+              <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)}>
+                Next Level →
+              </button>
+            ) : (
+              <span className="badge badge-success">Module Mastered!</span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Right Column: 4-Column Queue State Canvas */}
-      <div className="lab-panel-right">
-        <div className="canvas-card">
-          <div className="lab-card-title">
-            <span>BullMQ / Redis State Machine Canvas</span>
-            <span className="badge badge-emerald">Redis In-Memory Hash/Stream</span>
+      {/* RIGHT PANEL: Live Redis Queue State Machine Visualizer */}
+      <div className="canvas-panel">
+        <div className="canvas-header">
+          <div>
+            <div className="canvas-title">Redis BullMQ Queue State Machine</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Watch jobs transition from Waiting to Active, and complete or quarantine to the Dead Letter Queue.
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <span className="badge badge-indigo">Concurrency: {concurrency}</span>
+            <span className="badge">Total Jobs: {jobs.length}</span>
+          </div>
+        </div>
+
+        {/* 4 State Buckets Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, flex: 1 }}>
+          {/* Waiting */}
+          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--primary)', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Waiting</span>
+              <span className="badge">{waitingJobs.length}</span>
+            </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}>
+              {waitingJobs.map(j => (
+                <div key={j.id} style={{ background: '#ffffff', border: '1px solid var(--border-light)', padding: '8px 10px', borderRadius: 6, fontSize: 11, fontWeight: 500 }}>
+                  {j.name}
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* 4-State Columns */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-            {/* 1. Waiting */}
-            <div className="lab-card" style={{ background: '#040711', minHeight: 280 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <strong style={{ fontSize: 12, color: 'var(--cyan)' }}>Waiting ({waitingJobs.length})</strong>
-                <span className="badge">Pending</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {waitingJobs.map(j => (
-                  <div key={j.id} style={{ padding: '8px 10px', background: 'rgba(6, 182, 212, 0.1)', borderLeft: '3px solid var(--cyan)', borderRadius: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-                    <div style={{ fontWeight: 600, color: '#fff' }}>{j.name}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 2 }}>{j.id} • {j.priority}</div>
-                    {j.state === 'retrying' && (
-                      <span className="badge badge-amber" style={{ fontSize: 9, marginTop: 4 }}>
-                        Retrying #{j.attempts}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
+          {/* Active */}
+          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: '#d97706', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Active (Processing)</span>
+              <span className="badge badge-warning">{activeJobs.length}</span>
             </div>
-
-            {/* 2. Active */}
-            <div className="lab-card" style={{ background: '#040711', minHeight: 280 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <strong style={{ fontSize: 12, color: 'var(--amber)' }}>Active ({activeJobs.length})</strong>
-                <span className="badge badge-amber">Locked</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {activeJobs.map(j => (
-                  <div key={j.id} style={{ padding: '8px 10px', background: 'rgba(245, 158, 11, 0.15)', borderLeft: '3px solid var(--amber)', borderRadius: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-                    <div style={{ fontWeight: 600, color: '#fff' }}>{j.name}</div>
-                    <div style={{ fontSize: 10, color: 'var(--amber)', marginTop: 2 }}>Worker #{j.workerId} (Leased)</div>
-                  </div>
-                ))}
-              </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}>
+              {activeJobs.map(j => (
+                <div key={j.id} style={{ background: 'var(--warning-light)', border: '1px solid var(--warning-border)', padding: '8px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, color: '#92400e' }}>
+                  {j.name}
+                </div>
+              ))}
             </div>
+          </div>
 
-            {/* 3. Completed */}
-            <div className="lab-card" style={{ background: '#040711', minHeight: 280 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <strong style={{ fontSize: 12, color: 'var(--emerald)' }}>Completed ({completedJobs.length})</strong>
-                <span className="badge badge-emerald">XACK</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {completedJobs.slice(0, 5).map(j => (
-                  <div key={j.id} style={{ padding: '8px 10px', background: 'rgba(16, 185, 129, 0.1)', borderLeft: '3px solid var(--emerald)', borderRadius: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-                    <div style={{ color: '#fff' }}>{j.name}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 2 }}>{j.id} • ✓ Acked</div>
-                  </div>
-                ))}
-              </div>
+          {/* Completed */}
+          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--success)', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Completed</span>
+              <span className="badge badge-success">{completedJobs.length}</span>
             </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}>
+              {completedJobs.map(j => (
+                <div key={j.id} style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: '8px 10px', borderRadius: 6, fontSize: 11, fontWeight: 500, color: 'var(--success)' }}>
+                  ✓ {j.name}
+                </div>
+              ))}
+            </div>
+          </div>
 
-            {/* 4. Dead Letter Queue */}
-            <div className="lab-card" style={{ background: '#040711', minHeight: 280 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <strong style={{ fontSize: 12, color: 'var(--rose)' }}>DLQ ({dlqJobs.length})</strong>
-                <span className="badge badge-rose">Poison</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {dlqJobs.map(j => (
-                  <div key={j.id} style={{ padding: '8px 10px', background: 'rgba(244, 63, 94, 0.15)', borderLeft: '3px solid var(--rose)', borderRadius: 6, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
-                    <div style={{ fontWeight: 600, color: 'var(--rose)' }}>{j.name}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 2 }}>{j.error}</div>
-                    <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 2 }}>Attempts: {j.attempts}/{j.maxAttempts}</div>
-                  </div>
-                ))}
-              </div>
+          {/* Dead Letter Queue (DLQ) */}
+          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: '#dc2626', display: 'flex', justifyContent: 'space-between' }}>
+              <span>Dead Letter Queue (DLQ)</span>
+              <span className="badge badge-danger">{dlqJobs.length}</span>
+            </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}>
+              {dlqJobs.map(j => (
+                <div key={j.id} style={{ background: 'var(--danger-light)', border: '1px solid var(--danger-border)', padding: '8px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, color: '#b91c1c' }}>
+                  ✕ {j.name} (Max Retries Reached)
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
