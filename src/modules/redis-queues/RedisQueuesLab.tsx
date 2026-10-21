@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Terminal as TerminalIcon } from 'lucide-react';
 
 interface QueueJob {
   id: string;
@@ -112,7 +113,6 @@ export const RedisQueuesLab: React.FC = () => {
     }
     setJobs(prev => [...prev, ...newJobs]);
 
-    // Simulate worker processing
     setTimeout(() => {
       setJobs(prev => prev.map(j => (j.status === 'waiting' ? { ...j, status: 'active' } : j)));
       setTimeout(() => {
@@ -132,15 +132,10 @@ export const RedisQueuesLab: React.FC = () => {
     };
     setJobs(prev => [...prev, brokenJob]);
 
-    // Step 1: Active
     setTimeout(() => {
       setJobs(prev => prev.map(j => j.id === brokenJob.id ? { ...j, status: 'active', attempts: 1 } : j));
-
-      // Step 2: Failed attempt 1
       setTimeout(() => {
         setJobs(prev => prev.map(j => j.id === brokenJob.id ? { ...j, status: 'failed', attempts: 2 } : j));
-
-        // Step 3: Failed attempt 2 & move to DLQ
         setTimeout(() => {
           setJobs(prev => prev.map(j => j.id === brokenJob.id ? { ...j, status: 'dlq', attempts: 3 } : j));
         }, 800);
@@ -160,191 +155,250 @@ export const RedisQueuesLab: React.FC = () => {
     }, 200);
   };
 
-  const waitingJobs = jobs.filter(j => j.status === 'waiting');
-  const activeJobs = jobs.filter(j => j.status === 'active');
-  const completedJobs = jobs.filter(j => j.status === 'completed');
-  const dlqJobs = jobs.filter(j => j.status === 'dlq' || j.status === 'failed');
-
   return (
-    <div className="lab-split-container">
-      {/* LEFT PANEL: Guided Lesson */}
-      <div className="guide-panel">
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {REDIS_LEVELS.map((lvl, idx) => (
-            <button
-              key={lvl.id}
-              className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => setLevelIdx(idx)}
-            >
-              Level {lvl.id}
-            </button>
-          ))}
-        </div>
+    <div className="lab-interactive-top-layout">
+      {/* 1. TOP SECTION: Visual BullMQ Pipeline & Companion Queue Controls */}
+      <div className="lab-workbench-top">
+        <div className="lab-workbench-grid">
+          {/* LEFT: Live Queue Pipeline Visualizer */}
+          <div className="workbench-main-visual">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid var(--border-light)' }}>
+              <div>
+                <div className="canvas-title" style={{ fontSize: 16, marginBottom: 2 }}>
+                  BullMQ Distributed Redis Queue
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Asynchronous worker pipeline: Waiting → Active → Completed / Dead Letter Queue.
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span className="badge badge-indigo">{concurrency} Worker Threads</span>
+                <span className="badge">{jobs.length} Jobs Total</span>
+              </div>
+            </div>
 
-        <div className="lesson-card" style={{ marginBottom: 0 }}>
-          <div className="lesson-step-header">
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+            {/* Queue Stages 4-Box Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+              <div style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 8, padding: 8 }}>
+                <div style={{ fontWeight: 700, fontSize: 11.5, color: '#2563eb', marginBottom: 4 }}>
+                  Waiting ({jobs.filter(j => j.status === 'waiting').length})
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minHeight: 70, maxHeight: 90, overflowY: 'auto' }}>
+                  {jobs.filter(j => j.status === 'waiting').map(j => (
+                    <div key={j.id} style={{ background: '#f8fafc', padding: '4px 6px', borderRadius: 4, fontSize: 10.5 }}>
+                      {j.name.slice(0, 24)}...
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 8, padding: 8 }}>
+                <div style={{ fontWeight: 700, fontSize: 11.5, color: '#d97706', marginBottom: 4 }}>
+                  Active ({jobs.filter(j => j.status === 'active').length})
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minHeight: 70, maxHeight: 90, overflowY: 'auto' }}>
+                  {jobs.filter(j => j.status === 'active').map(j => (
+                    <div key={j.id} style={{ background: '#fef3c7', padding: '4px 6px', borderRadius: 4, fontSize: 10.5, color: '#92400e', fontWeight: 600 }}>
+                      ⚡ {j.name.slice(0, 22)}...
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 8, padding: 8 }}>
+                <div style={{ fontWeight: 700, fontSize: 11.5, color: '#059669', marginBottom: 4 }}>
+                  Completed ({jobs.filter(j => j.status === 'completed').length})
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minHeight: 70, maxHeight: 90, overflowY: 'auto' }}>
+                  {jobs.filter(j => j.status === 'completed').map(j => (
+                    <div key={j.id} style={{ background: '#ecfdf5', padding: '4px 6px', borderRadius: 4, fontSize: 10.5, color: '#065f46' }}>
+                      ✓ {j.name.slice(0, 22)}...
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 8, padding: 8 }}>
+                <div style={{ fontWeight: 700, fontSize: 11.5, color: '#dc2626', marginBottom: 4 }}>
+                  Dead Letter ({jobs.filter(j => j.status === 'dlq' || j.status === 'failed').length})
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minHeight: 70, maxHeight: 90, overflowY: 'auto' }}>
+                  {jobs.filter(j => j.status === 'dlq' || j.status === 'failed').map(j => (
+                    <div key={j.id} style={{ background: '#fee2e2', padding: '4px 6px', borderRadius: 4, fontSize: 10.5, color: '#991b1b', fontWeight: 700 }}>
+                      ☠ {j.name.slice(0, 20)}... ({j.attempts}/3)
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Objectives, Bullets, Compact Redis Terminal & Enqueue Actions */}
+          <div className="workbench-side-panel">
+            {/* Level Tabs */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {REDIS_LEVELS.map((lvl, idx) => (
+                <button
+                  key={lvl.id}
+                  className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setLevelIdx(idx)}
+                  style={{ borderRadius: 9999, padding: '3px 9px', fontSize: 11 }}
+                >
+                  Level {lvl.id}
+                </button>
+              ))}
+            </div>
+
+            {/* Bullets & Goal Box */}
+            <div className="level-bullets-box">
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 {currentLevel.subtitle}
               </div>
-              <h2 className="lesson-step-title">{currentLevel.title}</h2>
+              <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-main)' }}>
+                {currentLevel.title}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                {currentLevel.goalDescription}
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                {currentLevel.id === 1 && (
+                  <button className="btn btn-primary btn-sm" onClick={() => enqueueNormalJobs(3)} style={{ fontSize: 11, padding: '4px 10px' }}>
+                    Enqueue Welcome Emails
+                  </button>
+                )}
+                {currentLevel.id === 2 && (
+                  <>
+                    <button className="btn btn-secondary btn-sm" onClick={() => setConcurrency(4)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                      Concurrency = 4
+                    </button>
+                    <button className="btn btn-primary btn-sm" onClick={() => enqueueNormalJobs(4)} style={{ fontSize: 11, padding: '4px 10px' }}>
+                      Process Batch
+                    </button>
+                  </>
+                )}
+                {currentLevel.id === 3 && (
+                  <button className="btn btn-primary btn-sm" onClick={enqueuePoisonPill} style={{ fontSize: 11, padding: '4px 10px' }}>
+                    Enqueue Poison Pill
+                  </button>
+                )}
+                <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  {showHint ? 'Hide Hint' : 'Hint'}
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={autoPlaySolution} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  Auto-Play
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  Reset
+                </button>
+              </div>
+
+              {showHint && (
+                <div style={{ marginTop: 4, padding: '6px 8px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 11.5, color: '#92400e' }}>
+                  <strong>Hint: </strong>{currentLevel.hint}
+                </div>
+              )}
             </div>
-            {levelWon && <span className="badge badge-success">Passed</span>}
-          </div>
 
-          <p className="lesson-explanation">{currentLevel.story}</p>
+            {/* Compact Authentic macOS Redis Terminal */}
+            <div className="terminal-window" style={{ minHeight: 140 }}>
+              <div className="terminal-header">
+                <div className="terminal-dots">
+                  <span className="dot dot-red" />
+                  <span className="dot dot-yellow" />
+                  <span className="dot dot-green" />
+                </div>
+                <span className="terminal-title" style={{ fontSize: 10.5 }}>
+                  <TerminalIcon size={11} style={{ color: '#38bdf8' }} />
+                  REDIS-CLI MONITOR — BULLMQ ENGINE
+                </span>
+                <div style={{ width: 28 }} />
+              </div>
 
-          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
-            {currentLevel.concept}
-          </div>
-
-          <div className="lesson-goal-box">
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
-              <div>{currentLevel.goalDescription}</div>
+              <div className="terminal-body" style={{ maxHeight: 110, overflowY: 'auto', fontSize: 11.5, padding: '8px 10px' }}>
+                {jobs.length === 0 ? (
+                  <div style={{ color: '#71717a', fontStyle: 'italic' }}>
+                    {'redis-cli> MONITOR waiting for LPUSH / BRPOPLPUSH events...'}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div className="terminal-line" style={{ color: '#38bdf8' }}>
+                      <span className="glyph">→</span>
+                      <span>LPUSH bull:mailQueue:waiting (Total: {jobs.length})</span>
+                    </div>
+                    {jobs.some(j => j.status === 'completed') && (
+                      <div className="terminal-line" style={{ color: '#4ade80' }}>
+                        <span className="glyph">✓</span>
+                        <span>{'HDEL bull:mailQueue:active -> ACK Job Completed'}</span>
+                      </div>
+                    )}
+                    {jobs.some(j => j.status === 'dlq') && (
+                      <div className="terminal-line" style={{ color: '#f87171' }}>
+                        <span className="glyph">✗</span>
+                        <span>{'ZADD bull:mailQueue:failed (3/3 retries exceeded -> DLQ)'}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Concurrency Selector for Level 2 */}
-          {currentLevel.id === 2 && (
-            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>Worker Concurrency:</span>
-              <button
-                className={`btn btn-sm ${concurrency === 1 ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setConcurrency(1)}
-              >
-                1 Worker
-              </button>
-              <button
-                className={`btn btn-sm ${concurrency === 4 ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setConcurrency(4)}
-              >
-                4 Workers (Parallel)
-              </button>
-            </div>
-          )}
-
-          <div className="lesson-actions">
-            {currentLevel.id !== 3 ? (
-              <button className="btn btn-primary btn-sm" onClick={() => enqueueNormalJobs(currentLevel.id === 2 ? 4 : 3)}>
-                Enqueue Jobs →
-              </button>
-            ) : (
-              <button className="btn btn-primary btn-sm" onClick={enqueuePoisonPill} style={{ background: '#dc2626' }}>
-                Enqueue Poison Pill (Corrupt Task) →
-              </button>
+            {/* Level Completion Status */}
+            {levelWon && (
+              <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: '10px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: 'var(--success)', fontSize: 12 }}>Level Completed!</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>You mastered distributed task queue orchestration.</div>
+                </div>
+                {levelIdx < REDIS_LEVELS.length - 1 ? (
+                  <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)} style={{ fontSize: 11, padding: '4px 10px' }}>
+                    Next Level →
+                  </button>
+                ) : (
+                  <span className="badge badge-success">Mastered!</span>
+                )}
+              </div>
             )}
-            <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
-              {showHint ? 'Hide Hint' : 'Need a Hint?'}
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
-              Show Solution
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
-              Reset
-            </button>
           </div>
-
-          {showHint && (
-            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
-              <strong>Hint: </strong>{currentLevel.hint}
-            </div>
-          )}
         </div>
-
-        {levelWon && (
-          <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: 14, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontWeight: 700, color: 'var(--success)' }}>Level Completed!</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>You mastered background queue state machines and DLQs.</div>
-            </div>
-            {levelIdx < REDIS_LEVELS.length - 1 ? (
-              <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)}>
-                Next Level →
-              </button>
-            ) : (
-              <span className="badge badge-success">Module Mastered!</span>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* RIGHT PANEL: Live Redis Queue State Machine Visualizer */}
-      <div className="canvas-panel">
-        <div className="canvas-header">
-          <div>
-            <div className="canvas-title">Redis BullMQ Queue State Machine</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              Watch jobs transition from Waiting to Active, and complete or quarantine to the Dead Letter Queue.
-            </div>
+      {/* 2. BOTTOM SECTION: Scroll for Deep Architectural Mechanics & Incident Story */}
+      <div className="lab-lesson-bottom">
+        {/* Left Card: Distributed Queue Architecture */}
+        <div className="lesson-objective-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--primary)', marginBottom: 4 }}>
+            Distributed Systems Pattern
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <span className="badge badge-indigo">Concurrency: {concurrency}</span>
-            <span className="badge">Total Jobs: {jobs.length}</span>
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            Redis In-Memory Queues &amp; Atomic Pop
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
+            {currentLevel.concept}
+          </p>
+
+          <div style={{ background: '#0f172a', padding: 14, borderRadius: 10, fontFamily: 'var(--font-mono)', fontSize: 11.5, color: '#e2e8f0', lineHeight: 1.5 }}>
+            <div style={{ color: '#38bdf8', marginBottom: 6, fontWeight: 700 }}>Atomic Work Stealing (BRPOPLPUSH):</div>
+            <div>Redis Lua script moves job from 'waiting' list to 'active' list atomically.</div>
+            <div>If the worker process crashes midway, the job remains in 'active' and is recovered by a supervisor stall-checker.</div>
           </div>
         </div>
 
-        {/* 4 State Buckets Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, flex: 1 }}>
-          {/* Waiting */}
-          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--primary)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Waiting</span>
-              <span className="badge">{waitingJobs.length}</span>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}>
-              {waitingJobs.map(j => (
-                <div key={j.id} style={{ background: '#ffffff', border: '1px solid var(--border-light)', padding: '8px 10px', borderRadius: 6, fontSize: 11, fontWeight: 500 }}>
-                  {j.name}
-                </div>
-              ))}
-            </div>
+        {/* Right Card: Production Incident Story */}
+        <div className="lesson-concepts-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#dc2626', marginBottom: 4 }}>
+            Production War Story
           </div>
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            The Infinite Retry Storm
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
+            {currentLevel.story}
+          </p>
 
-          {/* Active */}
-          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: '#d97706', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Active (Processing)</span>
-              <span className="badge badge-warning">{activeJobs.length}</span>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}>
-              {activeJobs.map(j => (
-                <div key={j.id} style={{ background: 'var(--warning-light)', border: '1px solid var(--warning-border)', padding: '8px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, color: '#92400e' }}>
-                  {j.name}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Completed */}
-          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--success)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Completed</span>
-              <span className="badge badge-success">{completedJobs.length}</span>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}>
-              {completedJobs.map(j => (
-                <div key={j.id} style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: '8px 10px', borderRadius: 6, fontSize: 11, fontWeight: 500, color: 'var(--success)' }}>
-                  ✓ {j.name}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Dead Letter Queue (DLQ) */}
-          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: '#dc2626', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Dead Letter Queue (DLQ)</span>
-              <span className="badge badge-danger">{dlqJobs.length}</span>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}>
-              {dlqJobs.map(j => (
-                <div key={j.id} style={{ background: 'var(--danger-light)', border: '1px solid var(--danger-border)', padding: '8px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600, color: '#b91c1c' }}>
-                  ✕ {j.name} (Max Retries Reached)
-                </div>
-              ))}
-            </div>
+          <div style={{ background: 'var(--bento-peach-bg)', border: '1.5px solid var(--bento-peach-border)', padding: 12, borderRadius: 10, fontSize: 12.5, color: 'var(--bento-peach-text)', lineHeight: 1.5 }}>
+            <strong>Systems Invariant: </strong> Failing background jobs must ALWAYS have an exponential backoff cap and maximum retry limit. Retrying without backoff causes millions of worker tasks to hammer third-party APIs during an outage, causing permanent IP bans.
           </div>
         </div>
       </div>

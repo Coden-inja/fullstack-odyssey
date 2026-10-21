@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Terminal as TerminalIcon } from 'lucide-react';
 
 interface MiddlewareLevel {
   id: number;
@@ -211,213 +212,305 @@ export const MiddlewareLab: React.FC = () => {
   };
 
   return (
-    <div className="lab-split-container">
-      {/* LEFT PANEL: Guided Lesson */}
-      <div className="guide-panel">
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {MIDDLEWARE_LEVELS.map((lvl, idx) => (
-            <button
-              key={lvl.id}
-              className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => setLevelIdx(idx)}
-            >
-              Level {lvl.id}
-            </button>
-          ))}
-        </div>
-
-        <div className="lesson-card" style={{ marginBottom: 0 }}>
-          <div className="lesson-step-header">
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
-                {currentLevel.subtitle}
+    <div className="lab-interactive-top-layout">
+      {/* 1. TOP SECTION: Middleware Onion Pipeline Visualizer + Companion Actions Panel */}
+      <div className="lab-workbench-top">
+        <div className="lab-workbench-grid">
+          {/* LEFT: Live Pipeline Visualizer & Context Inspector */}
+          <div className="workbench-main-visual">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid var(--border-light)' }}>
+              <div>
+                <div className="canvas-title" style={{ fontSize: 16, marginBottom: 2 }}>
+                  Express.js Middleware Onion Pipeline
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Inbound request enters concentric layers, mutates req context, and delegates via next().
+                </div>
               </div>
-              <h2 className="lesson-step-title">{currentLevel.title}</h2>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span className="badge badge-indigo">GET /api/resource</span>
+                {resStatus && (
+                  <span className={`badge ${resStatus === 200 ? 'badge-success' : resStatus === 401 ? 'badge-warning' : 'badge-danger'}`} style={{ fontSize: 11 }}>
+                    HTTP {resStatus}
+                  </span>
+                )}
+              </div>
             </div>
-            {levelWon && <span className="badge badge-success">Passed</span>}
-          </div>
 
-          <p className="lesson-explanation">{currentLevel.story}</p>
+            {/* Visual Pipeline Stack */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {currentLevel.pipelineLayers.map((layer, idx) => {
+                const isActive = activeStep === idx;
+                const isPassed = activeStep > idx;
 
-          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
-            {currentLevel.concept}
-          </div>
-
-          <div className="lesson-goal-box">
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
-              <div>{currentLevel.goalDescription}</div>
-            </div>
-          </div>
-
-          {/* Interactive Toggles for Levels 3 & 4 */}
-          {currentLevel.id === 3 && (
-            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <label style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={hasToken}
-                  onChange={(e) => setHasToken(e.target.checked)}
-                  style={{ marginRight: 6 }}
-                />
-                Include Auth Token in Request
-              </label>
-            </div>
-          )}
-
-          {currentLevel.id === 4 && (
-            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <label style={{ fontSize: 13, fontWeight: 600, color: '#dc2626', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={hasError}
-                  onChange={(e) => setHasError(e.target.checked)}
-                  style={{ marginRight: 6 }}
-                />
-                Simulate Database Crash in Route
-              </label>
-            </div>
-          )}
-
-          <div className="lesson-actions">
-            {activeStep < 0 ? (
-              <button className="btn btn-primary btn-sm" onClick={sendRequest}>
-                Send Request →
-              </button>
-            ) : (
-              <button className="btn btn-primary btn-sm" onClick={stepNext}>
-                Step next() →
-              </button>
-            )}
-            <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
-              {showHint ? 'Hide Hint' : 'Need a Hint?'}
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
-              Show Solution
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
-              Reset
-            </button>
-          </div>
-
-          {showHint && (
-            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
-              <strong>Hint: </strong>{currentLevel.hint}
-            </div>
-          )}
-        </div>
-
-        {levelWon && (
-          <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: 14, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontWeight: 700, color: 'var(--success)' }}>Level Completed!</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>You mastered how middleware chains work.</div>
-            </div>
-            {levelIdx < MIDDLEWARE_LEVELS.length - 1 ? (
-              <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)}>
-                Next Level →
-              </button>
-            ) : (
-              <span className="badge badge-success">Module Mastered!</span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* RIGHT PANEL: Live Middleware Pipeline Visualizer */}
-      <div className="canvas-panel">
-        <div className="canvas-header">
-          <div>
-            <div className="canvas-title">Express Middleware Pipeline</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              Watch the request travel step-by-step through registered middleware functions.
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span className="badge badge-indigo">GET /api/resource</span>
-            {resStatus && (
-              <span className={`badge ${resStatus === 200 ? 'badge-success' : resStatus === 401 ? 'badge-warning' : 'badge-danger'}`}>
-                HTTP {resStatus}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Sequential Middleware Chain */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-          {currentLevel.pipelineLayers.map((layer, idx) => {
-            const isActive = activeStep === idx;
-            const isPassed = activeStep > idx;
-
-            return (
-              <div
-                key={layer.name}
-                style={{
-                  background: isActive ? 'var(--primary-light)' : isPassed ? 'var(--bg-subtle)' : '#ffffff',
-                  border: `1px solid ${isActive ? 'var(--primary)' : isPassed ? 'var(--border-light)' : 'var(--border-strong)'}`,
-                  borderRadius: 8,
-                  padding: '12px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  transition: 'all 0.2s ease',
-                  boxShadow: isActive ? 'var(--shadow-md)' : 'none'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                return (
                   <div
+                    key={layer.name}
                     style={{
-                      width: 24,
-                      height: 24,
-                      borderRadius: 12,
-                      background: isActive ? 'var(--primary)' : isPassed ? 'var(--success)' : 'var(--bg-hover)',
-                      color: isActive || isPassed ? '#ffffff' : 'var(--text-dim)',
+                      background: isActive ? 'var(--primary-light)' : isPassed ? 'var(--bg-subtle)' : '#ffffff',
+                      border: `1.5px solid ${isActive ? 'var(--primary)' : isPassed ? 'var(--border-light)' : 'var(--border-strong)'}`,
+                      borderRadius: 8,
+                      padding: '8px 12px',
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 12,
-                      fontWeight: 700
+                      justifyContent: 'space-between',
+                      transition: 'all 0.2s ease',
+                      boxShadow: isActive ? 'var(--shadow-sm)' : 'none'
                     }}
                   >
-                    {isPassed ? '✓' : idx + 1}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: isActive ? 'var(--primary)' : 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>
-                      app.use({layer.name})
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 10,
+                          background: isActive ? 'var(--primary)' : isPassed ? 'var(--success)' : 'var(--bg-hover)',
+                          color: isActive || isPassed ? '#ffffff' : 'var(--text-dim)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 11,
+                          fontWeight: 700
+                        }}
+                      >
+                        {isPassed ? '✓' : idx + 1}
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: isActive ? 'var(--primary)' : 'var(--text-main)', fontFamily: 'var(--font-mono)' }}>
+                          app.use({layer.name})
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          {layer.desc}
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      {layer.desc}
-                    </div>
-                  </div>
-                </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span className="badge">{layer.type}</span>
-                  {isActive && <span className="badge badge-indigo">Executing next()</span>}
-                </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span className="badge" style={{ fontSize: 10 }}>{layer.type}</span>
+                      {isActive && <span className="badge badge-indigo" style={{ fontSize: 10 }}>Executing next()</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Context & Response Inspector */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div style={{ background: '#0f172a', padding: 10, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 11.5, color: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ color: '#38bdf8', marginBottom: 4, fontWeight: 700, fontSize: 11 }}>Request Context (req):</div>
+                <pre style={{ margin: 0, overflow: 'auto', color: '#e2e8f0', maxHeight: 85 }}>
+                  {JSON.stringify(reqContext, null, 2)}
+                </pre>
               </div>
-            );
-          })}
-        </div>
 
-        {/* Request Context Inspector */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, flex: 1 }}>
-          <div style={{ background: '#0f172a', padding: 14, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ color: '#38bdf8', marginBottom: 6, fontWeight: 700 }}>Request Context (req):</div>
-            <pre style={{ flex: 1, margin: 0, overflow: 'auto', color: '#e2e8f0' }}>
-              {JSON.stringify(reqContext, null, 2)}
-            </pre>
+              <div style={{ background: '#0f172a', padding: 10, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 11.5, color: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ color: '#34d399', marginBottom: 4, fontWeight: 700, fontSize: 11 }}>
+                  Response State (res): <span style={{ color: resStatus === 200 ? '#34d399' : '#f87171' }}>{resStatus ? `${resStatus}` : 'Pending'}</span>
+                </div>
+                <pre style={{ margin: 0, overflow: 'auto', color: '#e2e8f0', maxHeight: 85 }}>
+                  {resBody || '// Awaiting response transmission'}
+                </pre>
+              </div>
+            </div>
           </div>
 
-          <div style={{ background: '#0f172a', padding: 14, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ color: '#34d399', marginBottom: 6, fontWeight: 700 }}>Response State (res):</div>
-            <div style={{ marginBottom: 6, fontSize: 12 }}>
-              Status: <span style={{ color: resStatus === 200 ? '#34d399' : '#f87171' }}>{resStatus ? `${resStatus}` : 'Pending'}</span>
+          {/* RIGHT: Objectives, Bullets, Compact Pipeline Terminal & Controls */}
+          <div className="workbench-side-panel">
+            {/* Level Tabs */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {MIDDLEWARE_LEVELS.map((lvl, idx) => (
+                <button
+                  key={lvl.id}
+                  className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setLevelIdx(idx)}
+                  style={{ borderRadius: 9999, padding: '3px 9px', fontSize: 11 }}
+                >
+                  Level {lvl.id}
+                </button>
+              ))}
             </div>
-            <pre style={{ flex: 1, margin: 0, overflow: 'auto', color: '#e2e8f0' }}>
-              {resBody || '// No response sent yet'}
-            </pre>
+
+            {/* Bullets & Goal Box */}
+            <div className="level-bullets-box">
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {currentLevel.subtitle}
+              </div>
+              <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-main)' }}>
+                {currentLevel.title}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                {currentLevel.goalDescription}
+              </div>
+
+              {/* Interactive Toggles */}
+              {currentLevel.id === 3 && (
+                <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <input
+                    type="checkbox"
+                    checked={hasToken}
+                    onChange={(e) => setHasToken(e.target.checked)}
+                  />
+                  Include Authorization: Bearer Token
+                </label>
+              )}
+
+              {currentLevel.id === 4 && (
+                <label style={{ fontSize: 11.5, fontWeight: 600, color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <input
+                    type="checkbox"
+                    checked={hasError}
+                    onChange={(e) => setHasError(e.target.checked)}
+                  />
+                  Simulate Database Query Crash in Route
+                </label>
+              )}
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                {activeStep < 0 ? (
+                  <button className="btn btn-primary btn-sm" onClick={sendRequest} style={{ fontSize: 11, padding: '4px 10px' }}>
+                    Send Request →
+                  </button>
+                ) : (
+                  <button className="btn btn-primary btn-sm" onClick={stepNext} style={{ fontSize: 11, padding: '4px 10px' }}>
+                    Step next() →
+                  </button>
+                )}
+                <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  {showHint ? 'Hide Hint' : 'Hint'}
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={autoPlaySolution} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  Auto-Play
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  Reset
+                </button>
+              </div>
+
+              {showHint && (
+                <div style={{ marginTop: 4, padding: '6px 8px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 11.5, color: '#92400e' }}>
+                  <strong>Hint: </strong>{currentLevel.hint}
+                </div>
+              )}
+            </div>
+
+            {/* Compact Authentic macOS Pipeline Terminal */}
+            <div className="terminal-window" style={{ minHeight: 140 }}>
+              <div className="terminal-header">
+                <div className="terminal-dots">
+                  <span className="dot dot-red" />
+                  <span className="dot dot-yellow" />
+                  <span className="dot dot-green" />
+                </div>
+                <span className="terminal-title" style={{ fontSize: 10.5 }}>
+                  <TerminalIcon size={11} style={{ color: '#38bdf8' }} />
+                  EXPRESS HTTP REQUEST DISPATCHER
+                </span>
+                <div style={{ width: 28 }} />
+              </div>
+
+              <div className="terminal-body" style={{ maxHeight: 110, overflowY: 'auto', fontSize: 11.5, padding: '8px 10px' }}>
+                {activeStep === -1 ? (
+                  <div style={{ color: '#71717a', fontStyle: 'italic' }}>
+                    Waiting for incoming request... Click "Send Request" above.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div className="terminal-line" style={{ color: '#38bdf8' }}>
+                      <span className="glyph">→</span>
+                      <span>INBOUND: GET /api/resource</span>
+                    </div>
+                    {activeStep >= 0 && (
+                      <div className="terminal-line" style={{ color: '#cbd5e1' }}>
+                        <span className="glyph">•</span>
+                        <span>[pipeline] Layer 0 (cors): Injected Access-Control headers</span>
+                      </div>
+                    )}
+                    {activeStep >= 1 && (
+                      <div className="terminal-line" style={{ color: '#cbd5e1' }}>
+                        <span className="glyph">•</span>
+                        <span>[pipeline] Layer 1 (logger): Timestamped request entry</span>
+                      </div>
+                    )}
+                    {activeStep >= 2 && (
+                      <div className="terminal-line" style={{ color: hasToken || currentLevel.id !== 3 ? '#4ade80' : '#f87171' }}>
+                        <span className="glyph">{hasToken || currentLevel.id !== 3 ? '✓' : '✗'}</span>
+                        <span>[pipeline] Layer 2 (auth): {hasToken || currentLevel.id !== 3 ? 'Bearer token validated' : 'Missing token -> 401 Unauthorized'}</span>
+                      </div>
+                    )}
+                    {resStatus && (
+                      <div className="terminal-line" style={{ color: resStatus === 200 ? '#4ade80' : '#f87171' }}>
+                        <span className="glyph">✓</span>
+                        <span>OUTBOUND: HTTP {resStatus} Transmitted to Client</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Level Completion Status */}
+            {levelWon && (
+              <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: '10px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: 'var(--success)', fontSize: 12 }}>Level Completed!</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>You mastered middleware execution.</div>
+                </div>
+                {levelIdx < MIDDLEWARE_LEVELS.length - 1 ? (
+                  <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)} style={{ fontSize: 11, padding: '4px 10px' }}>
+                    Next Level →
+                  </button>
+                ) : (
+                  <span className="badge badge-success">Mastered!</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 2. BOTTOM SECTION: Scroll for Deep Architectural Mechanics & Incident Story */}
+      <div className="lab-lesson-bottom">
+        {/* Left Card: Middleware Composition Architecture */}
+        <div className="lesson-objective-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--primary)', marginBottom: 4 }}>
+            Software Architecture Pattern
+          </div>
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            Continuation-Passing Onion Mechanics
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
+            {currentLevel.concept}
+          </p>
+
+          <div style={{ background: '#0f172a', padding: 14, borderRadius: 10, fontFamily: 'var(--font-mono)', fontSize: 11.5, color: '#e2e8f0', lineHeight: 1.5 }}>
+            <div style={{ color: '#38bdf8', marginBottom: 6, fontWeight: 700 }}>Express Dispatch Loop:</div>
+            <div>function next(err) &#123;</div>
+            <div>&nbsp;&nbsp;const layer = stack[idx++];</div>
+            <div>&nbsp;&nbsp;if (err) &#123;</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;if (layer.length === 4) layer.handle(err, req, res, next);</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;else next(err); // Skip regular middleware</div>
+            <div>&nbsp;&nbsp;&#125; else &#123;</div>
+            <div>&nbsp;&nbsp;&nbsp;&nbsp;layer.handle(req, res, next);</div>
+            <div>&nbsp;&nbsp;&#125;</div>
+            <div>&#125;</div>
+          </div>
+        </div>
+
+        {/* Right Card: Production Incident Story */}
+        <div className="lesson-concepts-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#dc2626', marginBottom: 4 }}>
+            Production War Story
+          </div>
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            The Forgotten next() Socket Leak
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
+            {currentLevel.story}
+          </p>
+
+          <div style={{ background: 'var(--bento-peach-bg)', border: '1.5px solid var(--bento-peach-border)', padding: 12, borderRadius: 10, fontSize: 12.5, color: 'var(--bento-peach-text)', lineHeight: 1.5 }}>
+            <strong>Systems Invariant: </strong> If a middleware function neither calls `next()` nor terminates the HTTP exchange with `res.send()` / `res.end()`, the client TCP socket remains open indefinitely until hitting the load balancer's 60-second gateway timeout.
           </div>
         </div>
       </div>

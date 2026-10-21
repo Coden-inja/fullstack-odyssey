@@ -812,7 +812,7 @@ body {
 .lab-interactive-top-layout {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
   max-width: 1440px;
   margin: 0 auto;
 }
@@ -821,16 +821,51 @@ body {
   background: var(--bg-surface);
   border: 1.5px solid var(--border-light);
   border-radius: 18px;
-  padding: 22px;
+  padding: 20px;
   box-shadow: var(--shadow-sm);
+}
+
+/* Dual Workbench Grid: Main Visual (left) + Bullets, Actions & Compact Terminal (right) */
+.lab-workbench-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 440px);
+  gap: 20px;
+  align-items: stretch;
+}
+
+@media (max-width: 1120px) {
+  .lab-workbench-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.workbench-main-visual {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
+  min-width: 0;
+}
+
+.workbench-side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.level-bullets-box {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .lab-lesson-bottom {
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
+  grid-template-columns: 1.15fr 0.85fr;
   gap: 20px;
 }
 
@@ -916,3 +951,93 @@ body {
   color: var(--text-main);
   letter-spacing: -0.02em;
 }
+
+/* ==========================================================================
+   Dual Workbench Top-First Layout (Prompt #110 Compliant)
+   - Interactive Visual Screen + Companion Bullets/Terminal Side-by-Side in Viewport
+   - Architectural Details & Production Incident Stories Below (Scroll for Details)
+   ========================================================================== */
+.lab-interactive-top-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 100%;
+}
+
+.lab-workbench-top {
+  width: 100%;
+}
+
+.lab-workbench-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 440px);
+  gap: 22px;
+  align-items: stretch;
+}
+
+@media (max-width: 1100px) {
+  .lab-workbench-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.workbench-main-visual {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-light);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 440px;
+}
+
+.workbench-side-panel {
+  background: var(--bg-surface);
+  border: 1.5px solid var(--border-light);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.workbench-side-panel .terminal-window {
+  margin: 0;
+  max-width: 100%;
+  border-radius: 12px;
+  border: 1.5px solid #27272a;
+}
+
+.workbench-side-panel .terminal-body {
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 8px 10px;
+  max-height: 130px;
+}
+
+.level-bullets-box {
+  background: var(--bg-subtle);
+  border: 1.5px solid var(--border-light);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lab-lesson-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .lab-lesson-bottom {
+    grid-template-columns: 1fr;
+  }
+}
+

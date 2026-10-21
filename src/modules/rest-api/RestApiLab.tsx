@@ -216,253 +216,263 @@ export const RestApiLab: React.FC = () => {
 
   return (
     <div className="lab-interactive-top-layout">
-      {/* 1. TOP SECTION: Interactive HTTP Client Workbench & macOS Wire Terminal (Immediate, Zero-Scroll) */}
+      {/* 1. TOP SECTION: Interactive HTTP Client & Companion Action Panel */}
       <div className="lab-workbench-top">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 10, borderBottom: '1px solid var(--border-light)' }}>
-          <div>
-            <div className="canvas-title" style={{ fontSize: 18, marginBottom: 2 }}>
-              HTTP Client Workbench &amp; Wire Protocol Inspector
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              Configure request methods, routes, and headers. Observe real-time TCP socket frames.
-            </div>
-          </div>
-          <div>
-            {responseStatus && (
-              <span className={`badge ${responseStatus >= 200 && responseStatus < 300 ? 'badge-success' : responseStatus >= 300 && responseStatus < 400 ? 'badge-indigo' : 'badge-danger'}`} style={{ fontSize: 13, padding: '5px 12px' }}>
-                HTTP {responseStatus}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Interactive URL Bar & Request Controls */}
-        <div style={{ background: '#f8fafc', border: '1.5px solid var(--border-light)', borderRadius: 12, padding: 12 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-            {/* Method Selector */}
-            <select
-              value={method}
-              onChange={(e) => setMethod(e.target.value as any)}
-              className="module-switcher"
-              style={{
-                fontWeight: 800,
-                color: method === 'GET' ? '#2563eb' : method === 'POST' ? '#059669' : method === 'DELETE' ? '#dc2626' : '#7c3aed',
-                borderColor: 'var(--border-strong)',
-                background: '#ffffff',
-                padding: '8px 14px'
-              }}
-            >
-              <option value="GET">GET</option>
-              <option value="POST">POST</option>
-              <option value="DELETE">DELETE</option>
-              <option value="OPTIONS">OPTIONS</option>
-            </select>
-
-            {/* Path Input */}
-            <input
-              type="text"
-              value={path}
-              onChange={(e) => setPath(e.target.value)}
-              style={{
-                flex: 1,
-                padding: '9px 14px',
-                border: '1.5px solid var(--border-strong)',
-                borderRadius: 9999,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 13,
-                outline: 'none',
-                background: '#ffffff'
-              }}
-              placeholder="/api/users"
-            />
-
-            {/* Send Request Button */}
-            <button className="btn btn-primary btn-pill" onClick={sendRequest} style={{ gap: 6, fontWeight: 700, padding: '9px 20px' }}>
-              <Send size={13} />
-              Send Request
-            </button>
-          </div>
-
-          {/* Header Options */}
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center', fontSize: 12, color: 'var(--text-muted)', paddingLeft: 4 }}>
-            <span style={{ fontWeight: 600 }}>Header Flags:</span>
-            <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input
-                type="checkbox"
-                checked={includeEtag}
-                onChange={(e) => setIncludeEtag(e.target.checked)}
-              />
-              Send Cached ETag (If-None-Match: "w91a-882f")
-            </label>
-          </div>
-        </div>
-
-        {/* Authentic macOS Wire Protocol Terminal */}
-        <div className="terminal-window" style={{ minHeight: 200 }}>
-          <div className="terminal-header">
-            <div className="terminal-dots">
-              <span className="dot dot-red" />
-              <span className="dot dot-yellow" />
-              <span className="dot dot-green" />
-            </div>
-            <span className="terminal-title">
-              <TerminalIcon size={12} style={{ color: '#38bdf8' }} />
-              RAW TCP SOCKET FRAMES — HTTP/1.1 WIRE
-            </span>
-            <div style={{ width: 36 }} />
-          </div>
-
-          <div className="terminal-body" style={{ maxHeight: 180, overflowY: 'auto' }}>
-            {wireLog.length === 0 ? (
-              <div style={{ color: '#71717a', fontStyle: 'italic', padding: '6px 0' }}>
-                Click "Send Request" above to stream raw TCP socket frames between browser and server...
-              </div>
-            ) : (
-              wireLog.map((line, idx) => (
-                <div key={idx} className="terminal-line" style={{ color: line.startsWith('>') ? '#38bdf8' : line.startsWith('< HTTP/1.1 2') ? '#4ade80' : line.startsWith('< HTTP/1.1 3') ? '#818cf8' : '#f4f4f5' }}>
-                  <span className="glyph" style={{ color: line.startsWith('>') ? '#38bdf8' : line.startsWith('< HTTP/1.1 2') ? '#4ade80' : '#a1a1aa' }}>
-                    {line.startsWith('>') ? '→' : line.startsWith('< HTTP') ? '✓' : '•'}
-                  </span>
-                  <span>{line}</span>
+        <div className="lab-workbench-grid">
+          {/* LEFT: Live HTTP Client & Response Inspector */}
+          <div className="workbench-main-visual">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 8, borderBottom: '1px solid var(--border-light)' }}>
+              <div>
+                <div className="canvas-title" style={{ fontSize: 16, marginBottom: 2 }}>
+                  HTTP Client Workbench
                 </div>
-              ))
-            )}
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Configure method and headers, dispatch over loopback TCP socket.
+                </div>
+              </div>
+              {responseStatus && (
+                <span className={`badge ${responseStatus >= 200 && responseStatus < 300 ? 'badge-success' : responseStatus >= 300 && responseStatus < 400 ? 'badge-indigo' : 'badge-danger'}`} style={{ fontSize: 12, padding: '4px 10px' }}>
+                  HTTP {responseStatus}
+                </span>
+              )}
+            </div>
+
+            {/* URL Bar */}
+            <div style={{ background: '#f8fafc', border: '1.5px solid var(--border-light)', borderRadius: 12, padding: 10 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select
+                  value={method}
+                  onChange={(e) => setMethod(e.target.value as any)}
+                  className="module-switcher"
+                  style={{
+                    fontWeight: 800,
+                    color: method === 'GET' ? '#2563eb' : method === 'POST' ? '#059669' : method === 'DELETE' ? '#dc2626' : '#7c3aed',
+                    borderColor: 'var(--border-strong)',
+                    background: '#ffffff',
+                    padding: '7px 12px',
+                    fontSize: 12.5
+                  }}
+                >
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                  <option value="DELETE">DELETE</option>
+                  <option value="OPTIONS">OPTIONS</option>
+                </select>
+
+                <input
+                  type="text"
+                  value={path}
+                  onChange={(e) => setPath(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    border: '1.5px solid var(--border-strong)',
+                    borderRadius: 9999,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 12.5,
+                    outline: 'none',
+                    background: '#ffffff'
+                  }}
+                  placeholder="/api/users"
+                />
+
+                <button className="btn btn-primary btn-pill" onClick={sendRequest} style={{ gap: 6, fontWeight: 700, padding: '8px 16px', fontSize: 12.5 }}>
+                  <Send size={12} />
+                  Send
+                </button>
+              </div>
+
+              {/* Header Flags */}
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 11.5, color: 'var(--text-muted)', marginTop: 8, paddingLeft: 4 }}>
+                <span style={{ fontWeight: 600 }}>Headers:</span>
+                <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input
+                    type="checkbox"
+                    checked={includeEtag}
+                    onChange={(e) => setIncludeEtag(e.target.checked)}
+                  />
+                  Send ETag If-None-Match: "w91a-882f"
+                </label>
+              </div>
+            </div>
+
+            {/* Response Inspector */}
+            <div style={{ background: '#ffffff', border: '1.5px solid var(--border-light)', borderRadius: 12, padding: 12, flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-main)' }}>
+                  HTTP Response Payload Inspector
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                  Content-Type: application/json
+                </span>
+              </div>
+              <div style={{ background: '#0f172a', borderRadius: 8, padding: 12, flex: 1, minHeight: 140, overflow: 'auto', fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc' }}>
+                {responseBody ? (
+                  <pre style={{ margin: 0 }}>{responseBody}</pre>
+                ) : (
+                  <div style={{ color: '#64748b', fontStyle: 'italic', textAlign: 'center', paddingTop: 40 }}>
+                    No response received yet. Select an HTTP method, endpoint, and click "Send".
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
-          {responseBody && (
-            <div style={{ padding: '10px 16px', background: 'rgba(255, 255, 255, 0.04)', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-              <div style={{ color: '#4ade80', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
-                Response Body Payload:
-              </div>
-              <pre style={{ margin: 0, color: '#f4f4f5', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{responseBody}</pre>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 2. BOTTOM SECTION: Course Syllabus & Learning Guide (Below Workbench) */}
-      <div className="lab-lesson-bottom">
-        {/* Left Card: Objective & Verification */}
-        <div className="lesson-objective-card">
-          <div>
-            {/* Level Indicator Tabs */}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+          {/* RIGHT: Objectives, Bullets, Compact Wire Terminal & Check Answer */}
+          <div className="workbench-side-panel">
+            {/* Level Tabs */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {REST_LEVELS.map((lvl, idx) => (
                 <button
                   key={lvl.id}
                   className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
                   onClick={() => setLevelIdx(idx)}
-                  style={{ borderRadius: 9999, padding: '4px 12px' }}
+                  style={{ borderRadius: 9999, padding: '3px 10px', fontSize: 11 }}
                 >
                   Level {lvl.id}
                 </button>
               ))}
             </div>
 
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+            {/* Important Bullets Box */}
+            <div className="level-bullets-box">
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 {currentLevel.subtitle}
               </div>
-              <h2 className="lesson-step-title">{currentLevel.title}</h2>
+              <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-main)' }}>
+                {currentLevel.title}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                {currentLevel.goalDescription}
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  <HelpCircle size={11} />
+                  {showHint ? 'Hide Hint' : 'Hint'}
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={autoPlaySolution} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  <Eye size={11} />
+                  Auto-Fill
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  <RefreshCw size={11} />
+                  Reset
+                </button>
+              </div>
+
+              {showHint && (
+                <div style={{ marginTop: 6, padding: '8px 10px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 11.5, color: '#92400e' }}>
+                  <strong>Hint: </strong>{currentLevel.hint}
+                </div>
+              )}
             </div>
 
-            <div className="lesson-goal-box" style={{ marginBottom: 14 }}>
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
-                <div>{currentLevel.goalDescription}</div>
+            {/* Compact Authentic macOS Wire Terminal */}
+            <div className="terminal-window" style={{ minHeight: 140 }}>
+              <div className="terminal-header">
+                <div className="terminal-dots">
+                  <span className="dot dot-red" />
+                  <span className="dot dot-yellow" />
+                  <span className="dot dot-green" />
+                </div>
+                <span className="terminal-title" style={{ fontSize: 10.5 }}>
+                  <TerminalIcon size={11} style={{ color: '#38bdf8' }} />
+                  TCP SOCKET WIRE STREAM
+                </span>
+                <div style={{ width: 28 }} />
+              </div>
+
+              <div className="terminal-body" style={{ maxHeight: 110, overflowY: 'auto', fontSize: 11.5, padding: '8px 12px' }}>
+                {wireLog.length === 0 ? (
+                  <div style={{ color: '#71717a', fontStyle: 'italic' }}>
+                    Awaiting packets... Click "Send" above.
+                  </div>
+                ) : (
+                  wireLog.map((line, idx) => (
+                    <div key={idx} className="terminal-line" style={{ color: line.startsWith('>') ? '#38bdf8' : line.startsWith('< HTTP/1.1 2') ? '#4ade80' : line.startsWith('< HTTP/1.1 3') ? '#818cf8' : '#cbd5e1' }}>
+                      <span className="glyph" style={{ color: line.startsWith('>') ? '#38bdf8' : line.startsWith('< HTTP/1.1 2') ? '#4ade80' : '#a1a1aa' }}>
+                        {line.startsWith('>') ? '→' : line.startsWith('< HTTP') ? '✓' : '•'}
+                      </span>
+                      <span>{line}</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
-            <div className="lesson-actions" style={{ marginBottom: 14 }}>
-              <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
-                <HelpCircle size={12} />
-                {showHint ? 'Hide Hint' : 'Need a Hint?'}
-              </button>
-              <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
-                <Eye size={12} />
-                Auto-Fill Solution
-              </button>
-              <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
-                <RefreshCw size={12} />
-                Reset Level
-              </button>
-            </div>
-
-            {showHint && (
-              <div style={{ marginBottom: 14, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 8, fontSize: 13, color: '#92400e' }}>
-                <strong>Hint: </strong>{currentLevel.hint}
-              </div>
-            )}
-          </div>
-
-          {/* Validation Check Button */}
-          <div style={{ paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
-            <button
-              className="btn btn-primary"
-              onClick={handleCheckAnswer}
-              style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', fontWeight: 700 }}
-            >
-              <CheckCircle2 size={14} />
-              Check My Answer
-            </button>
-
-            {validationMsg && (
-              <div
-                style={{
-                  marginTop: 10,
-                  padding: '10px 12px',
-                  borderRadius: 8,
-                  fontSize: 12.5,
-                  background: validationMsg.passed ? 'var(--success-light)' : 'var(--danger-light)',
-                  border: `1px solid ${validationMsg.passed ? 'var(--success-border)' : 'var(--danger-border)'}`,
-                  color: validationMsg.passed ? '#065f46' : '#991b1b',
-                  fontWeight: 500
-                }}
+            {/* Verification Button & Result */}
+            <div>
+              <button
+                className="btn btn-primary"
+                onClick={handleCheckAnswer}
+                style={{ width: '100%', justifyContent: 'center', padding: '9px 14px', fontWeight: 700, fontSize: 13 }}
               >
-                {validationMsg.message}
-              </div>
-            )}
+                <CheckCircle2 size={13} />
+                Check My Answer
+              </button>
+
+              {validationMsg && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    background: validationMsg.passed ? 'var(--success-light)' : 'var(--danger-light)',
+                    border: `1px solid ${validationMsg.passed ? 'var(--success-border)' : 'var(--danger-border)'}`,
+                    color: validationMsg.passed ? '#065f46' : '#991b1b',
+                    fontWeight: 600
+                  }}
+                >
+                  {validationMsg.message}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. BOTTOM SECTION: Scroll for In-Depth Architectural Mechanics & War Story */}
+      <div className="lab-lesson-bottom">
+        {/* Left Card: Core Concept Deep Dive */}
+        <div className="lesson-objective-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--primary)', marginBottom: 4 }}>
+            RFC Standards &amp; Architecture
+          </div>
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            HTTP/1.1 Protocol Mechanics
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
+            {currentLevel.concept}
+          </p>
+
+          <div style={{ background: '#0f172a', padding: 14, borderRadius: 10, fontFamily: 'var(--font-mono)', fontSize: 11.5, color: '#e2e8f0', lineHeight: 1.5 }}>
+            <div style={{ color: '#38bdf8', marginBottom: 6, fontWeight: 700 }}>Wire Protocol Anatomy (RFC 9112):</div>
+            <div>METHOD /uri HTTP/1.1\r\n</div>
+            <div>Host: api.production.internal\r\n</div>
+            <div>Accept: application/json\r\n</div>
+            <div>\r\n</div>
+            <div style={{ color: '#94a3b8' }}>[Optional Binary / JSON Stream Payload]</div>
           </div>
         </div>
 
-        {/* Right Card: Story Dilemma, Architectural Concept & Next Level Bridge */}
+        {/* Right Card: Production Incident Story */}
         <div className="lesson-concepts-card">
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#64748b' }}>
-            System Architecture &amp; Why It Matters
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#dc2626', marginBottom: 4 }}>
+            Production War Story
           </div>
-
-          <p className="lesson-explanation" style={{ margin: 0 }}>
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            The Cost of Protocol Violations
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
             {currentLevel.story}
           </p>
 
-          <div style={{ background: 'var(--bg-subtle)', padding: '14px 16px', borderRadius: 12, fontSize: 13, color: 'var(--text-muted)' }}>
-            <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: 4 }}>Key Architectural Concept:</strong>
-            {currentLevel.concept}
+          <div style={{ background: 'var(--bento-peach-bg)', border: '1.5px solid var(--bento-peach-border)', padding: 12, borderRadius: 10, fontSize: 12.5, color: 'var(--bento-peach-text)', lineHeight: 1.5 }}>
+            <strong>Systems Invariant: </strong> HTTP safe methods (GET, HEAD, OPTIONS) MUST never alter server state. If an automated web crawler hits a GET endpoint that triggers deletions or charges, disaster ensues.
           </div>
-
-          {/* Narrative Bridge to Next Level */}
-          {levelWon && levelIdx < REST_LEVELS.length - 1 ? (
-            <div style={{ marginTop: 'auto', background: 'var(--bento-mint-bg)', border: '1.5px solid var(--bento-mint-border)', padding: 14, borderRadius: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--bento-mint-text)', marginBottom: 2 }}>
-                Next Up: {REST_LEVELS[levelIdx + 1].title}
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--bento-mint-text)', opacity: 0.85, marginBottom: 10 }}>
-                Now that you completed this level, advance to the next concept.
-              </div>
-              <button
-                className="btn btn-success btn-sm btn-pill"
-                onClick={() => setLevelIdx(levelIdx + 1)}
-                style={{ gap: 6 }}
-              >
-                Advance to Level {levelIdx + 2}
-                <ArrowRight size={12} />
-              </button>
-            </div>
-          ) : levelWon && (
-            <div style={{ marginTop: 'auto', background: 'var(--success-light)', border: '1.5px solid var(--success-border)', padding: 14, borderRadius: 12, color: '#065f46', fontWeight: 700 }}>
-              🎉 Module Mastered! All 4 REST API levels completed.
-            </div>
-          )}
         </div>
       </div>
     </div>

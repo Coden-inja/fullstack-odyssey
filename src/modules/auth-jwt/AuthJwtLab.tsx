@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Terminal as TerminalIcon } from 'lucide-react';
 
 interface AuthLevel {
   id: number;
@@ -43,7 +44,7 @@ const AUTH_LEVELS: AuthLevel[] = [
     title: 'Level 3: The Cookie Shield',
     subtitle: 'Why HttpOnly Cookies Stop Token Theft (XSS)',
     story: 'Why do security engineers insist on storing tokens in HttpOnly cookies instead of localStorage?',
-    concept: 'If a malicious script is injected onto your page (XSS), it can read `localStorage.getItem("token")` in one line of code! But browsers physically prevent JavaScript from reading HttpOnly cookies. The browser handles them automatically.',
+    concept: 'If a malicious script is injected onto your page (XSS), it can read localStorage.getItem("token") in one line of code! But browsers physically prevent JavaScript from reading HttpOnly cookies. The browser handles them automatically.',
     goalDescription: 'Switch token storage to "HttpOnly Cookie", click "Simulate XSS Attack", and watch the browser block the script from stealing your credentials.',
     hint: 'Select HttpOnly Cookie and run the XSS simulation.',
     initialRole: 'member',
@@ -145,195 +146,230 @@ export const AuthJwtLab: React.FC = () => {
   const signaturePart = isTampered ? 'tampered_fake_signature_98x1' : 'valid_hmac_secret_seal_88a4';
 
   return (
-    <div className="lab-split-container">
-      {/* LEFT PANEL: Guided Lesson */}
-      <div className="guide-panel">
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {AUTH_LEVELS.map((lvl, idx) => (
-            <button
-              key={lvl.id}
-              className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => setLevelIdx(idx)}
-            >
-              Level {lvl.id}
-            </button>
-          ))}
-        </div>
+    <div className="lab-interactive-top-layout">
+      {/* 1. TOP SECTION: Visual JWT Anatomy & Companion Auth Controls */}
+      <div className="lab-workbench-top">
+        <div className="lab-workbench-grid">
+          {/* LEFT: Live JWT Token Anatomy & Storage Jar */}
+          <div className="workbench-main-visual">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid var(--border-light)' }}>
+              <div>
+                <div className="canvas-title" style={{ fontSize: 16, marginBottom: 2 }}>
+                  JWT Token Cryptographic Anatomy
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Color-coded Header (Red), Claims Payload (Purple), and HMAC-SHA256 Signature (Cyan).
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span className="badge badge-indigo">HS256</span>
+                <span className="badge">{storageType === 'cookie' ? 'HttpOnly Cookie' : 'localStorage'}</span>
+              </div>
+            </div>
 
-        <div className="lesson-card" style={{ marginBottom: 0 }}>
-          <div className="lesson-step-header">
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+            {/* Formatted Token String */}
+            <div style={{ background: '#0f172a', padding: 12, borderRadius: 10, fontFamily: 'var(--font-mono)', fontSize: 12, wordBreak: 'break-all', lineHeight: 1.6 }}>
+              <span style={{ color: '#f87171' }}>{headerPart}</span>
+              <span style={{ color: '#94a3b8' }}>.</span>
+              <span style={{ color: '#c084fc' }}>{payloadPart}</span>
+              <span style={{ color: '#94a3b8' }}>.</span>
+              <span style={{ color: '#38bdf8' }}>{signaturePart}</span>
+            </div>
+
+            {/* Decoded Claims Inspector */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#c084fc', marginBottom: 4 }}>Decoded Payload Claims:</div>
+                <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-main)' }}>
+                  <div>sub: 42</div>
+                  <div style={{ fontWeight: 700, color: role === 'admin' ? '#dc2626' : 'var(--text-main)' }}>role: "{role}"</div>
+                  <div>exp: 1740000000</div>
+                </div>
+              </div>
+
+              <div style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', marginBottom: 4 }}>Client Storage Location:</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Target: <strong>{storageType}</strong>
+                </div>
+                <div style={{ fontSize: 11, color: storageType === 'cookie' ? '#059669' : '#dc2626', marginTop: 4 }}>
+                  {storageType === 'cookie' ? '✓ Protected against JavaScript XSS extraction' : '⚠ Vulnerable to document.cookie / localStorage theft'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Objectives, Bullets, Compact Auth Terminal & Actions */}
+          <div className="workbench-side-panel">
+            {/* Level Tabs */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {AUTH_LEVELS.map((lvl, idx) => (
+                <button
+                  key={lvl.id}
+                  className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setLevelIdx(idx)}
+                  style={{ borderRadius: 9999, padding: '3px 9px', fontSize: 11 }}
+                >
+                  Level {lvl.id}
+                </button>
+              ))}
+            </div>
+
+            {/* Bullets & Goal Box */}
+            <div className="level-bullets-box">
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 {currentLevel.subtitle}
               </div>
-              <h2 className="lesson-step-title">{currentLevel.title}</h2>
-            </div>
-            {levelWon && <span className="badge badge-success">Passed</span>}
-          </div>
-
-          <p className="lesson-explanation">{currentLevel.story}</p>
-
-          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
-            {currentLevel.concept}
-          </div>
-
-          <div className="lesson-goal-box">
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
-              <div>{currentLevel.goalDescription}</div>
-            </div>
-          </div>
-
-          {/* Interactive Controls */}
-          {currentLevel.id === 2 && (
-            <div style={{ marginBottom: 16 }}>
-              <button className="btn btn-outline btn-sm" onClick={handleTamper} style={{ borderColor: '#ef4444', color: '#dc2626' }}>
-                Tamper Payload (Change role to "admin")
-              </button>
-            </div>
-          )}
-
-          {currentLevel.id === 3 && (
-            <div style={{ marginBottom: 16, background: 'var(--bg-main)', padding: 12, borderRadius: 6, border: '1px solid var(--border-light)' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>
-                Storage Location:
+              <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-main)' }}>
+                {currentLevel.title}
               </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <label style={{ fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input
-                    type="radio"
-                    name="storage"
-                    checked={storageType === 'localStorage'}
-                    onChange={() => setStorageType('localStorage')}
-                  />
-                  localStorage (Vulnerable)
-                </label>
-                <label style={{ fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input
-                    type="radio"
-                    name="storage"
-                    checked={storageType === 'cookie'}
-                    onChange={() => setStorageType('cookie')}
-                  />
-                  HttpOnly Cookie (Protected)
-                </label>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                {currentLevel.goalDescription}
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                {currentLevel.id === 1 && (
+                  <button className="btn btn-primary btn-sm" onClick={verifySignature} style={{ fontSize: 11, padding: '4px 10px' }}>
+                    Verify Signature
+                  </button>
+                )}
+                {currentLevel.id === 2 && (
+                  <>
+                    <button className="btn btn-secondary btn-sm" onClick={handleTamper} style={{ fontSize: 11, padding: '4px 8px' }}>
+                      Tamper (role: admin)
+                    </button>
+                    <button className="btn btn-primary btn-sm" onClick={verifySignature} style={{ fontSize: 11, padding: '4px 10px' }}>
+                      Verify Signature
+                    </button>
+                  </>
+                )}
+                {currentLevel.id === 3 && (
+                  <>
+                    <button
+                      className={`btn btn-sm ${storageType === 'cookie' ? 'btn-primary' : 'btn-outline'}`}
+                      onClick={() => setStorageType('cookie')}
+                      style={{ fontSize: 11, padding: '4px 8px' }}
+                    >
+                      Use HttpOnly Cookie
+                    </button>
+                    <button className="btn btn-secondary btn-sm" onClick={simulateXss} style={{ fontSize: 11, padding: '4px 8px' }}>
+                      Simulate XSS Attack
+                    </button>
+                  </>
+                )}
+                <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  {showHint ? 'Hide Hint' : 'Hint'}
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={autoPlaySolution} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  Auto-Play
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  Reset
+                </button>
+              </div>
+
+              {showHint && (
+                <div style={{ marginTop: 4, padding: '6px 8px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 11.5, color: '#92400e' }}>
+                  <strong>Hint: </strong>{currentLevel.hint}
+                </div>
+              )}
+            </div>
+
+            {/* Compact Authentic macOS Auth Terminal */}
+            <div className="terminal-window" style={{ minHeight: 140 }}>
+              <div className="terminal-header">
+                <div className="terminal-dots">
+                  <span className="dot dot-red" />
+                  <span className="dot dot-yellow" />
+                  <span className="dot dot-green" />
+                </div>
+                <span className="terminal-title" style={{ fontSize: 10.5 }}>
+                  <TerminalIcon size={11} style={{ color: '#38bdf8' }} />
+                  AUTH CRYPTOGRAPHIC VALIDATOR
+                </span>
+                <div style={{ width: 28 }} />
+              </div>
+
+              <div className="terminal-body" style={{ maxHeight: 110, overflowY: 'auto', fontSize: 11.5, padding: '8px 10px' }}>
+                {!verificationResult && !xssResult ? (
+                  <div style={{ color: '#71717a', fontStyle: 'italic' }}>
+                    Awaiting verification check or XSS injection test...
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {verificationResult && (
+                      <div className="terminal-line" style={{ color: verificationResult === 'VALID' ? '#4ade80' : '#f87171' }}>
+                        <span className="glyph">{verificationResult === 'VALID' ? '✓' : '✗'}</span>
+                        <span>HMAC-SHA256: {verificationResult === 'VALID' ? 'Signature verified against secret' : 'Signature mismatch! FORGED_TOKEN_REJECTED'}</span>
+                      </div>
+                    )}
+                    {xssResult && (
+                      <div className="terminal-line" style={{ color: xssResult === 'BLOCKED' ? '#4ade80' : '#f87171' }}>
+                        <span className="glyph">{xssResult === 'BLOCKED' ? '✓' : '✗'}</span>
+                        <span>XSS Probe: {xssResult === 'BLOCKED' ? 'HttpOnly flag blocked document.cookie read' : 'localStorage token stolen by attacker script!'}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-          )}
 
-          <div className="lesson-actions">
-            {currentLevel.id !== 3 ? (
-              <button className="btn btn-primary btn-sm" onClick={verifySignature}>
-                Verify Signature →
-              </button>
-            ) : (
-              <button className="btn btn-primary btn-sm" onClick={simulateXss}>
-                Simulate XSS Attack →
-              </button>
+            {/* Level Completion Status */}
+            {levelWon && (
+              <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: '10px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: 'var(--success)', fontSize: 12 }}>Level Completed!</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>You mastered token cryptographic security.</div>
+                </div>
+                {levelIdx < AUTH_LEVELS.length - 1 ? (
+                  <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)} style={{ fontSize: 11, padding: '4px 10px' }}>
+                    Next Level →
+                  </button>
+                ) : (
+                  <span className="badge badge-success">Mastered!</span>
+                )}
+              </div>
             )}
-            <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
-              {showHint ? 'Hide Hint' : 'Need a Hint?'}
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
-              Show Solution
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
-              Reset
-            </button>
           </div>
-
-          {showHint && (
-            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
-              <strong>Hint: </strong>{currentLevel.hint}
-            </div>
-          )}
         </div>
-
-        {levelWon && (
-          <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: 14, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontWeight: 700, color: 'var(--success)' }}>Level Completed!</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>You mastered token signatures and cookie security.</div>
-            </div>
-            {levelIdx < AUTH_LEVELS.length - 1 ? (
-              <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)}>
-                Next Level →
-              </button>
-            ) : (
-              <span className="badge badge-success">Module Mastered!</span>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* RIGHT PANEL: Live Token Anatomy Visualizer */}
-      <div className="canvas-panel">
-        <div className="canvas-header">
-          <div>
-            <div className="canvas-title">Token Cryptography & Storage Inspector</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              See how the 3 Base64URL parts assemble and how the server checks integrity.
-            </div>
+      {/* 2. BOTTOM SECTION: Scroll for Deep Architectural Mechanics & Incident Story */}
+      <div className="lab-lesson-bottom">
+        {/* Left Card: JWT Cryptographic Architecture */}
+        <div className="lesson-objective-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--primary)', marginBottom: 4 }}>
+            Cryptographic Authentication
           </div>
-          <div>
-            {verificationResult && (
-              <span className={`badge ${verificationResult === 'VALID' ? 'badge-success' : 'badge-danger'}`}>
-                {verificationResult === 'VALID' ? 'Signature Verified ✓' : 'Invalid Signature (Tampered) ✕'}
-              </span>
-            )}
-            {xssResult && (
-              <span className={`badge ${xssResult === 'BLOCKED' ? 'badge-success' : 'badge-danger'}`} style={{ marginLeft: 6 }}>
-                {xssResult === 'BLOCKED' ? 'XSS Neutralized: Cookie Protected' : 'Token Stolen by XSS Script!'}
-              </span>
-            )}
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            Digital Signatures &amp; HMAC Verification
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
+            {currentLevel.concept}
+          </p>
+
+          <div style={{ background: '#0f172a', padding: 14, borderRadius: 10, fontFamily: 'var(--font-mono)', fontSize: 11.5, color: '#e2e8f0', lineHeight: 1.5 }}>
+            <div style={{ color: '#38bdf8', marginBottom: 6, fontWeight: 700 }}>HMAC-SHA256 Math:</div>
+            <div>Signature = Base64URL( HMAC_SHA256( secretKey, header + "." + payload ) )</div>
+            <div style={{ color: '#94a3b8', marginTop: 4 }}>Because secretKey never leaves the server, an attacker who alters the payload produces an unrecognizable signature.</div>
           </div>
         </div>
 
-        {/* 3-Part Token Wire Representation */}
-        <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 16, marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8 }}>
-            Encoded JWT Wire String:
+        {/* Right Card: Production Incident Story */}
+        <div className="lesson-concepts-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#dc2626', marginBottom: 4 }}>
+            Production War Story
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, wordBreak: 'break-all', lineHeight: 1.8 }}>
-            <span style={{ color: '#2563eb', background: '#dbeafe', padding: '2px 4px', borderRadius: 4 }}>{headerPart}</span>
-            <span style={{ color: '#64748b' }}>.</span>
-            <span style={{ color: '#7c3aed', background: '#ede9fe', padding: '2px 4px', borderRadius: 4 }}>{payloadPart}</span>
-            <span style={{ color: '#64748b' }}>.</span>
-            <span style={{ color: isTampered ? '#dc2626' : '#059669', background: isTampered ? '#fee2e2' : '#d1fae5', padding: '2px 4px', borderRadius: 4 }}>{signaturePart}</span>
-          </div>
-        </div>
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            The "alg: none" Elevation Exploit
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
+            {currentLevel.story}
+          </p>
 
-        {/* Decoded Sections */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, flex: 1 }}>
-          <div style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 8, padding: 12, fontSize: 12, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontWeight: 700, color: '#2563eb', marginBottom: 6 }}>1. Header (Algorithm)</div>
-            <pre style={{ margin: 0, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-              {JSON.stringify({ alg: 'HS256', typ: 'JWT' }, null, 2)}
-            </pre>
-          </div>
-
-          <div style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 8, padding: 12, fontSize: 12, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontWeight: 700, color: '#7c3aed', marginBottom: 6 }}>2. Payload (User Claims)</div>
-            <pre style={{ margin: 0, color: isTampered ? '#dc2626' : 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-              {JSON.stringify({ sub: 42, role, exp: 1740000000 }, null, 2)}
-            </pre>
-          </div>
-
-          <div style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 8, padding: 12, fontSize: 12, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontWeight: 700, color: isTampered ? '#dc2626' : '#059669', marginBottom: 6 }}>3. Signature (HMAC)</div>
-            <div style={{ color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              HMACSHA256(
-                <br />&nbsp;&nbsp;base64(header) + "." +
-                <br />&nbsp;&nbsp;base64(payload),
-                <br />&nbsp;&nbsp;server_secret_key
-              )
-            </div>
-            {isTampered && (
-              <div style={{ marginTop: 8, color: '#dc2626', fontWeight: 700 }}>
-                Signature Mismatch: Math does not match payload!
-              </div>
-            )}
+          <div style={{ background: 'var(--bento-peach-bg)', border: '1.5px solid var(--bento-peach-border)', padding: 12, borderRadius: 10, fontSize: 12.5, color: 'var(--bento-peach-text)', lineHeight: 1.5 }}>
+            <strong>Systems Invariant: </strong> Never trust client tokens without signature verification. Vulnerable JWT libraries that accepted the `none` algorithm allowed attackers to forge admin badges with empty signatures, granting total root access.
           </div>
         </div>
       </div>

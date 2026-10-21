@@ -614,213 +614,264 @@ export const GitDagLab: React.FC = () => {
   };
 
   return (
-    <div className="lab-split-container">
-      {/* LEFT PANEL: Guided Lesson & Diagnostic Check */}
-      <div className="guide-panel">
-        {/* Level Navigation */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {LEVELS.map((l, idx) => (
-            <button
-              key={l.id}
-              className={`btn btn-sm ${currentLevelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => setCurrentLevelIdx(idx)}
-            >
-              Level {l.id}
-            </button>
-          ))}
-        </div>
-
-        {/* Step-by-Step Cognitive Guide Card */}
-        <div className="lesson-card" style={{ marginBottom: 0 }}>
-          <div className="lesson-step-header">
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
-                {level.subtitle}
+    <div className="lab-interactive-top-layout">
+      {/* 1. TOP SECTION: Visual Graph + Companion Terminal & Bullets Panel */}
+      <div className="lab-workbench-top">
+        <div className="lab-workbench-grid">
+          {/* LEFT: Live Git DAG & Target Tree */}
+          <div className="workbench-main-visual">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid var(--border-light)' }}>
+              <div>
+                <div className="canvas-title" style={{ fontSize: 16, marginBottom: 2 }}>
+                  Git Directed Acyclic Graph (DAG) Workbench
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Interactive commit graphs with parent pointers, branch labels, and HEAD.
+                </div>
               </div>
-              <h2 className="lesson-step-title">{level.title}</h2>
-            </div>
-            {validation?.passed && <span className="badge badge-success">Passed ✓</span>}
-          </div>
-
-          <p className="lesson-explanation">{level.story}</p>
-
-          {/* Look At Anchor Section */}
-          <div style={{ background: 'var(--bg-subtle)', padding: '10px 12px', borderRadius: 6, fontSize: 12, marginBottom: 12, color: 'var(--text-muted)' }}>
-            <div style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: 4 }}>👀 Look at the screen right now:</div>
-            {level.lookAt.map((point, idx) => (
-              <div key={idx} style={{ marginBottom: 2 }}>• {point}</div>
-            ))}
-          </div>
-
-          {/* Objective Box */}
-          <div className="lesson-goal-box">
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 2 }}>🎯 Your Goal:</div>
-              <div>{level.goalDescription}</div>
-            </div>
-          </div>
-
-          {/* Submission and Assistance Actions */}
-          <div className="lesson-actions" style={{ marginTop: 12 }}>
-            <button className="btn btn-primary btn-sm" onClick={handleCheckAnswer} style={{ fontWeight: 700 }}>
-              🔍 Check My Answer
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
-              {showHint ? 'Hide Hint' : 'Need a Hint?'}
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={handleAutoPlaySolution}>
-              Show Solution
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={() => resetLevel(currentLevelIdx)}>
-              Reset
-            </button>
-          </div>
-
-          {showHint && (
-            <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 12, color: '#92400e' }}>
-              <strong>Hint: </strong>{level.hint}
-            </div>
-          )}
-        </div>
-
-        {/* Diagnostic Feedback Banner */}
-        {validation && (
-          <div
-            style={{
-              background: validation.passed ? 'var(--success-light)' : 'var(--danger-light)',
-              border: `1px solid ${validation.passed ? 'var(--success-border)' : 'var(--danger-border)'}`,
-              padding: 14,
-              borderRadius: 8
-            }}
-          >
-            <div style={{ fontWeight: 700, color: validation.passed ? 'var(--success)' : 'var(--danger)', marginBottom: 4 }}>
-              {validation.passed ? 'Level Completed Successfully!' : 'Check Result: Needs Adjustment'}
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: validation.remedy ? 8 : 0 }}>
-              {validation.message}
-            </div>
-            {validation.remedy && (
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#b91c1c' }}>
-                👉 What to fix: {validation.remedy}
-              </div>
-            )}
-            {validation.passed && currentLevelIdx < LEVELS.length - 1 && (
-              <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--success-border)' }}>
-                {level.nextLevelTeaser && (
-                  <div style={{ fontSize: 12, color: 'var(--text-main)', marginBottom: 8, fontStyle: 'italic', lineHeight: 1.5 }}>
-                    💡 <strong>What's Next:</strong> {level.nextLevelTeaser}
-                  </div>
-                )}
-                <button
-                  className="btn btn-success btn-sm"
-                  onClick={() => setCurrentLevelIdx(currentLevelIdx + 1)}
-                  style={{ fontWeight: 700 }}
-                >
-                  {level.nextLevelButtonLabel || `Advance to Level ${currentLevelIdx + 2} →`}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Authentic macOS Interactive CLI Terminal */}
-        <div className="terminal-window" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 220 }}>
-          <div className="terminal-header">
-            <div className="terminal-dots">
-              <span className="dot dot-red" />
-              <span className="dot dot-yellow" />
-              <span className="dot dot-green" />
-            </div>
-            <span className="terminal-title">
-              <TerminalIcon size={12} style={{ color: '#38bdf8' }} />
-              GIT REPO TERMINAL — {head.branch ? `(${head.branch})` : `(HEAD detached at ${head.commit})`}
-            </span>
-            <div style={{ width: 36 }} />
-          </div>
-
-          <div className="terminal-body" style={{ flex: 1, maxHeight: 150, overflowY: 'auto' }}>
-            {terminalHistory.map((item, idx) => (
-              <div 
-                key={idx} 
-                className="terminal-line" 
-                style={{ 
-                  color: item.startsWith('$') ? '#38bdf8' : item.startsWith('Verification Passed') ? '#4ade80' : item.startsWith('Check Failed') ? '#f87171' : '#cbd5e1' 
-                }}
-              >
-                <span className="glyph" style={{ color: item.startsWith('$') ? '#38bdf8' : item.startsWith('Verification') ? '#4ade80' : item.startsWith('Check') ? '#f87171' : '#a1a1aa' }}>
-                  {item.startsWith('$') ? '→' : item.startsWith('Verification') ? '✓' : item.startsWith('Check') ? '✗' : '•'}
-                </span>
-                <span>{item.startsWith('$ ') ? item.slice(2) : item}</span>
-              </div>
-            ))}
-          </div>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              executeCommand(inputCmd);
-              setInputCmd('');
-            }}
-            className="terminal-prompt-row"
-            style={{ margin: '0 12px 12px' }}
-          >
-            <span className="terminal-prompt-glyph">→</span>
-            <input
-              type="text"
-              className="terminal-prompt-input"
-              value={inputCmd}
-              onChange={(e) => setInputCmd(e.target.value)}
-              placeholder="Type command (e.g. git commit, git branch bugfix)..."
-            />
-            <button type="submit" className="btn btn-sm btn-primary" style={{ padding: '4px 12px', fontSize: 11, borderRadius: 6 }}>
-              <CornerDownLeft size={11} />
-              Run
-            </button>
-          </form>
-        </div>
-      </div>
-
-      {/* RIGHT PANEL: Side-by-Side Goal Target vs Current History */}
-      <div className="canvas-panel" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {/* Goal Canvas Box */}
-        <div style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 8, padding: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--primary)' }}>
-              🎯 Target Goal Tree (What your graph must match)
-            </span>
-            <span className="badge">Goal State</span>
-          </div>
-          <div style={{ background: '#f8fafc', border: '1px solid var(--border-light)', borderRadius: 6, overflow: 'auto' }}>
-            {renderSvgGraph(level.goalCommits, level.goalBranches, level.goalHead, 460, 160, true)}
-          </div>
-        </div>
-
-        {/* Your Live Current Canvas Box */}
-        <div style={{ flex: 1, background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 8, padding: 12, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <div>
-              <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-main)' }}>
-                Your Current Git Tree (Interactive)
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>
+              <span className="badge badge-indigo">
                 HEAD: {head.branch ? `refs/heads/${head.branch}` : `Detached at ${head.commit}`}
               </span>
             </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {level.allowedButtons.map(btn => (
-                <button
-                  key={btn.label}
-                  className="btn btn-outline btn-sm"
-                  onClick={() => executeCommand(btn.cmd)}
-                >
-                  {btn.label}
-                </button>
-              ))}
+
+            {/* Target Goal Canvas Box */}
+            <div style={{ background: '#ffffff', border: '1.5px solid var(--border-light)', borderRadius: 10, padding: 10 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--primary)' }}>
+                  🎯 Target Goal State (Match this graph)
+                </span>
+                <span className="badge" style={{ fontSize: 10, padding: '2px 8px' }}>Target Blueprint</span>
+              </div>
+              <div style={{ background: '#f8fafc', border: '1px solid var(--border-light)', borderRadius: 6, overflow: 'auto' }}>
+                {renderSvgGraph(level.goalCommits, level.goalBranches, level.goalHead, 460, 130, true)}
+              </div>
+            </div>
+
+            {/* Live Interactive Git Tree */}
+            <div style={{ background: '#ffffff', border: '1.5px solid var(--border-light)', borderRadius: 10, padding: 10, flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-main)' }}>
+                  Your Working Repository Tree (Live)
+                </span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {level.allowedButtons.map(btn => (
+                    <button
+                      key={btn.label}
+                      className="btn btn-outline btn-sm"
+                      onClick={() => executeCommand(btn.cmd)}
+                      style={{ padding: '3px 8px', fontSize: 11 }}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={{ flex: 1, background: '#fafbfc', border: '1px solid var(--border-light)', borderRadius: 6, overflow: 'auto', minHeight: 180 }}>
+                {renderSvgGraph(commits, branches, head, 500, 180, false)}
+              </div>
             </div>
           </div>
 
-          <div style={{ flex: 1, background: '#fafbfc', border: '1px solid var(--border-light)', borderRadius: 6, overflow: 'auto' }}>
-            {renderSvgGraph(commits, branches, head, 500, 200, false)}
+          {/* RIGHT: Objectives, Bullets, Compact CLI Terminal & Check Answer */}
+          <div className="workbench-side-panel">
+            {/* Level Tabs */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {LEVELS.map((l, idx) => (
+                <button
+                  key={l.id}
+                  className={`btn btn-sm ${currentLevelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setCurrentLevelIdx(idx)}
+                  style={{ borderRadius: 9999, padding: '3px 9px', fontSize: 11 }}
+                >
+                  Level {l.id}
+                </button>
+              ))}
+            </div>
+
+            {/* Bullets & Goal Box */}
+            <div className="level-bullets-box">
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {level.subtitle}
+              </div>
+              <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-main)' }}>
+                {level.title}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                {level.goalDescription}
+              </div>
+
+              {/* Look At Bullets */}
+              <div style={{ background: '#ffffff', border: '1px solid var(--border-light)', padding: '8px 10px', borderRadius: 8, fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
+                <div style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: 2 }}>👀 Key Observables:</div>
+                {level.lookAt.map((point, idx) => (
+                  <div key={idx} style={{ marginBottom: 1 }}>• {point}</div>
+                ))}
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)} style={{ fontSize: 11, padding: '3px 8px' }}>
+                  {showHint ? 'Hide Hint' : 'Hint'}
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={handleAutoPlaySolution} style={{ fontSize: 11, padding: '3px 8px' }}>
+                  Solution
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={() => resetLevel(currentLevelIdx)} style={{ fontSize: 11, padding: '3px 8px' }}>
+                  Reset
+                </button>
+              </div>
+
+              {showHint && (
+                <div style={{ marginTop: 4, padding: '6px 8px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 11.5, color: '#92400e' }}>
+                  <strong>Hint: </strong>{level.hint}
+                </div>
+              )}
+            </div>
+
+            {/* Compact Authentic macOS CLI Terminal */}
+            <div className="terminal-window" style={{ minHeight: 140 }}>
+              <div className="terminal-header">
+                <div className="terminal-dots">
+                  <span className="dot dot-red" />
+                  <span className="dot dot-yellow" />
+                  <span className="dot dot-green" />
+                </div>
+                <span className="terminal-title" style={{ fontSize: 10.5 }}>
+                  <TerminalIcon size={11} style={{ color: '#38bdf8' }} />
+                  GIT REPO TERMINAL — {head.branch ? `(${head.branch})` : `(${head.commit})`}
+                </span>
+                <div style={{ width: 28 }} />
+              </div>
+
+              <div className="terminal-body" style={{ maxHeight: 95, overflowY: 'auto', fontSize: 11.5, padding: '8px 10px' }}>
+                {terminalHistory.map((item, idx) => (
+                  <div 
+                    key={idx} 
+                    className="terminal-line" 
+                    style={{ 
+                      color: item.startsWith('$') ? '#38bdf8' : item.startsWith('Verification Passed') ? '#4ade80' : item.startsWith('Check Failed') ? '#f87171' : '#cbd5e1' 
+                    }}
+                  >
+                    <span className="glyph" style={{ color: item.startsWith('$') ? '#38bdf8' : item.startsWith('Verification') ? '#4ade80' : item.startsWith('Check') ? '#f87171' : '#a1a1aa' }}>
+                      {item.startsWith('$') ? '→' : item.startsWith('Verification') ? '✓' : item.startsWith('Check') ? '✗' : '•'}
+                    </span>
+                    <span>{item.startsWith('$ ') ? item.slice(2) : item}</span>
+                  </div>
+                ))}
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  executeCommand(inputCmd);
+                  setInputCmd('');
+                }}
+                className="terminal-prompt-row"
+                style={{ margin: '0 8px 8px', padding: '5px 8px' }}
+              >
+                <span className="terminal-prompt-glyph">→</span>
+                <input
+                  type="text"
+                  className="terminal-prompt-input"
+                  value={inputCmd}
+                  onChange={(e) => setInputCmd(e.target.value)}
+                  placeholder="git commit, git branch..."
+                  style={{ fontSize: 12 }}
+                />
+                <button type="submit" className="btn btn-sm btn-primary" style={{ padding: '3px 8px', fontSize: 10.5, borderRadius: 5 }}>
+                  <CornerDownLeft size={10} />
+                  Run
+                </button>
+              </form>
+            </div>
+
+            {/* Check My Answer Button & Validation Banner */}
+            <div>
+              <button
+                className="btn btn-primary"
+                onClick={handleCheckAnswer}
+                style={{ width: '100%', justifyContent: 'center', padding: '9px 14px', fontWeight: 700, fontSize: 13 }}
+              >
+                🔍 Check My Answer
+              </button>
+
+              {validation && (
+                <div
+                  style={{
+                    marginTop: 8,
+                    background: validation.passed ? 'var(--success-light)' : 'var(--danger-light)',
+                    border: `1px solid ${validation.passed ? 'var(--success-border)' : 'var(--danger-border)'}`,
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    fontSize: 12
+                  }}
+                >
+                  <div style={{ fontWeight: 700, color: validation.passed ? 'var(--success)' : 'var(--danger)', marginBottom: 2 }}>
+                    {validation.passed ? 'Level Completed Successfully!' : 'Check Result: Needs Adjustment'}
+                  </div>
+                  <div style={{ color: 'var(--text-muted)' }}>
+                    {validation.message}
+                  </div>
+                  {validation.remedy && (
+                    <div style={{ fontSize: 11.5, fontWeight: 600, color: '#b91c1c', marginTop: 3 }}>
+                      👉 What to fix: {validation.remedy}
+                    </div>
+                  )}
+                  {validation.passed && currentLevelIdx < LEVELS.length - 1 && (
+                    <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px solid var(--success-border)' }}>
+                      <button
+                        className="btn btn-success btn-sm"
+                        onClick={() => setCurrentLevelIdx(currentLevelIdx + 1)}
+                        style={{ fontWeight: 700, width: '100%', justifyContent: 'center', fontSize: 12 }}
+                      >
+                        Advance to Level {currentLevelIdx + 2} →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. BOTTOM SECTION: Scroll for Deep Architectural Mechanics & Incident Story */}
+      <div className="lab-lesson-bottom">
+        {/* Left Card: Git Internals Concept */}
+        <div className="lesson-objective-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--primary)', marginBottom: 4 }}>
+            Git Internal Storage Architecture
+          </div>
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            Directed Acyclic Graphs &amp; SHA-1 Hashing
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
+            {level.concept}
+          </p>
+
+          <div style={{ background: '#0f172a', padding: 14, borderRadius: 10, fontFamily: 'var(--font-mono)', fontSize: 11.5, color: '#e2e8f0', lineHeight: 1.5 }}>
+            <div style={{ color: '#38bdf8', marginBottom: 6, fontWeight: 700 }}>.git/objects Storage Hierarchy:</div>
+            <div>[Blob]   SHA1(File Content) → Read-only immutable bytes</div>
+            <div>[Tree]   List of (Mode, Blob/Tree SHA1, Filename)</div>
+            <div>[Commit] Tree SHA1 + Parent Commit SHA1 + Author + Message</div>
+            <div>[Ref]    .git/refs/heads/main → 40-char SHA1 Pointer</div>
+          </div>
+        </div>
+
+        {/* Right Card: Production Incident Story */}
+        <div className="lesson-concepts-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#dc2626', marginBottom: 4 }}>
+            Production War Story
+          </div>
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            The Detached HEAD &amp; Force-Push Incident
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
+            {level.story}
+          </p>
+
+          <div style={{ background: 'var(--bento-peach-bg)', border: '1.5px solid var(--bento-peach-border)', padding: 12, borderRadius: 10, fontSize: 12.5, color: 'var(--bento-peach-text)', lineHeight: 1.5 }}>
+            <strong>Systems Invariant: </strong> Git commits without a reachable branch or tag reference will eventually be pruned by `git gc` (garbage collection). Always ensure your HEAD points to a valid branch reference before making critical commits.
           </div>
         </div>
       </div>

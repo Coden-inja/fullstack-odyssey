@@ -233,228 +233,270 @@ export const EventLoopLab: React.FC = () => {
   };
 
   return (
-    <div className="lab-split-container">
-      {/* LEFT PANEL: Guided Lesson */}
-      <div className="guide-panel">
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {EVENT_LOOP_LEVELS.map((lvl, idx) => (
-            <button
-              key={lvl.id}
-              className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => setLevelIdx(idx)}
-            >
-              Level {lvl.id}
-            </button>
-          ))}
-        </div>
-
-        <div className="lesson-card" style={{ marginBottom: 0 }}>
-          <div className="lesson-step-header">
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
-                {currentLevel.subtitle}
+    <div className="lab-interactive-top-layout">
+      {/* 1. TOP SECTION: Event Loop Engine Visualizer + Companion Actions Panel */}
+      <div className="lab-workbench-top">
+        <div className="lab-workbench-grid">
+          {/* LEFT: Live Visual Queues & JavaScript Source */}
+          <div className="workbench-main-visual">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid var(--border-light)' }}>
+              <div>
+                <div className="canvas-title" style={{ fontSize: 16, marginBottom: 2 }}>
+                  Event Loop &amp; Task Queue Visualizer
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Watch frames push to Call Stack and callbacks drain from Microtask &amp; Timer queues.
+                </div>
               </div>
-              <h2 className="lesson-step-title">{currentLevel.title}</h2>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span className="badge badge-indigo">V8 Single Thread</span>
+                <span className="badge">libuv 4-Pool</span>
+              </div>
             </div>
-            {levelWon && <span className="badge badge-success">Passed</span>}
-          </div>
 
-          <p className="lesson-explanation">{currentLevel.story}</p>
-
-          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
-            {currentLevel.concept}
-          </div>
-
-          <div className="lesson-goal-box">
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
-              <div>{currentLevel.goalDescription}</div>
-            </div>
-          </div>
-
-          <div className="lesson-actions">
-            <button className="btn btn-primary btn-sm" onClick={stepNext}>
-              Step Next Line →
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
-              {showHint ? 'Hide Hint' : 'Need a Hint?'}
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
-              Show Solution
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
-              Reset
-            </button>
-          </div>
-
-          {showHint && (
-            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
-              <strong>Hint: </strong>{currentLevel.hint}
-            </div>
-          )}
-        </div>
-
-        {levelWon && (
-          <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: 14, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontWeight: 700, color: 'var(--success)' }}>Level Completed!</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>You mastered how this queue behaves.</div>
-            </div>
-            {levelIdx < EVENT_LOOP_LEVELS.length - 1 ? (
-              <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)}>
-                Next Level →
-              </button>
-            ) : (
-              <span className="badge badge-success">Module Mastered!</span>
-            )}
-          </div>
-        )}
-
-        {/* Code Block Inspector */}
-        <div style={{ background: '#0f172a', padding: 16, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc' }}>
-          <div style={{ color: '#94a3b8', marginBottom: 8, fontWeight: 600 }}>JavaScript Source:</div>
-          {currentLevel.codeLines.map((line, idx) => (
-            <div 
-              key={idx} 
-              style={{ 
-                padding: '3px 6px', 
-                borderRadius: 4, 
-                background: activeLine === idx ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
-                color: activeLine === idx ? '#38bdf8' : '#e2e8f0',
-                borderLeft: activeLine === idx ? '3px solid #38bdf8' : '3px solid transparent'
-              }}
-            >
-              {line}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* RIGHT PANEL: Live Event Loop Visualizer */}
-      <div className="canvas-panel">
-        <div className="canvas-header">
-          <div>
-            <div className="canvas-title">Event Loop Engine</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              Watch frames push to the stack and callbacks drain from their respective queues.
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <span className="badge badge-indigo">V8 Single Thread</span>
-            <span className="badge">libuv 4-Thread Pool</span>
-          </div>
-        </div>
-
-        {/* Visual Queues Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, flex: 1 }}>
-          {/* Call Stack */}
-          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--primary)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Call Stack (Executing)</span>
-              <span className="badge">{callStack.length} Frame</span>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column-reverse', gap: 6, background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 6, padding: 8, minHeight: 120 }}>
-              {callStack.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--text-dim)', textAlign: 'center', margin: 'auto' }}>
-                  Stack Empty (Idle)
-                </div>
-              ) : (
-                callStack.map((frame, idx) => (
-                  <div key={idx} style={{ background: 'var(--primary-light)', border: '1px solid var(--primary-border)', padding: '6px 10px', borderRadius: 4, fontSize: 12, fontWeight: 600, color: 'var(--primary)' }}>
-                    {frame}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Microtasks Queue */}
-          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: '#059669', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Microtasks (Promises / VIP)</span>
-              <span className="badge badge-success">{microtasks.length}</span>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 6, padding: 8, minHeight: 120 }}>
-              {microtasks.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--text-dim)', textAlign: 'center', margin: 'auto' }}>
-                  Queue Drained
-                </div>
-              ) : (
-                microtasks.map((task, idx) => (
-                  <div key={idx} style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: '6px 10px', borderRadius: 4, fontSize: 12, fontWeight: 500, color: 'var(--success)' }}>
-                    {task}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Timers Queue */}
-          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: '#d97706', display: 'flex', justifyContent: 'space-between' }}>
-              <span>Timers (Macrotasks)</span>
-              <span className="badge badge-warning">{timers.length}</span>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 6, padding: 8, minHeight: 120 }}>
-              {timers.length === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--text-dim)', textAlign: 'center', margin: 'auto' }}>
-                  No Timers Waiting
-                </div>
-              ) : (
-                timers.map((timer, idx) => (
-                  <div key={idx} style={{ background: 'var(--warning-light)', border: '1px solid var(--warning-border)', padding: '6px 10px', borderRadius: 4, fontSize: 12, fontWeight: 500, color: '#92400e' }}>
-                    {timer}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Background Worker Threads */}
-          <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8, color: 'var(--text-main)', display: 'flex', justifyContent: 'space-between' }}>
-              <span>libuv Worker Pool</span>
-              <span className="badge">4 Threads</span>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 6, padding: 8, minHeight: 120 }}>
-              {workers.map((w, idx) => (
-                <div key={idx} style={{ padding: '6px 10px', borderRadius: 4, fontSize: 12, background: w.includes('Hashing') ? '#fee2e2' : 'var(--bg-subtle)', color: w.includes('Hashing') ? '#991b1b' : 'var(--text-muted)', fontWeight: w.includes('Hashing') ? 700 : 500 }}>
-                  {w}
+            {/* Code Block Inspector */}
+            <div style={{ background: '#0f172a', padding: 12, borderRadius: 10, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc' }}>
+              <div style={{ color: '#94a3b8', marginBottom: 6, fontWeight: 600, fontSize: 11 }}>Executing JavaScript Source:</div>
+              {currentLevel.codeLines.map((line, idx) => (
+                <div 
+                  key={idx} 
+                  style={{ 
+                    padding: '2px 6px', 
+                    borderRadius: 4, 
+                    background: activeLine === idx ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+                    color: activeLine === idx ? '#38bdf8' : '#e2e8f0',
+                    borderLeft: activeLine === idx ? '3px solid #38bdf8' : '3px solid transparent'
+                  }}
+                >
+                  {line}
                 </div>
               ))}
             </div>
+
+            {/* Visual Queues Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }}>
+              {/* Call Stack */}
+              <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, color: 'var(--primary)', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Call Stack</span>
+                  <span className="badge" style={{ fontSize: 10 }}>{callStack.length} Frame</span>
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column-reverse', gap: 4, background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 6, padding: 6, minHeight: 90 }}>
+                  {callStack.length === 0 ? (
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', margin: 'auto' }}>
+                      Stack Empty
+                    </div>
+                  ) : (
+                    callStack.map((frame, idx) => (
+                      <div key={idx} style={{ background: 'var(--primary-light)', border: '1px solid var(--primary-border)', padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600, color: 'var(--primary)' }}>
+                        {frame}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Microtasks Queue */}
+              <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, color: '#059669', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Microtasks</span>
+                  <span className="badge badge-success" style={{ fontSize: 10 }}>{microtasks.length}</span>
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 6, padding: 6, minHeight: 90 }}>
+                  {microtasks.length === 0 ? (
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', margin: 'auto' }}>
+                      Drained
+                    </div>
+                  ) : (
+                    microtasks.map((task, idx) => (
+                      <div key={idx} style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: 'var(--success)' }}>
+                        {task}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Timers Queue */}
+              <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, color: '#d97706', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Timers</span>
+                  <span className="badge badge-warning" style={{ fontSize: 10 }}>{timers.length}</span>
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 6, padding: 6, minHeight: 90 }}>
+                  {timers.length === 0 ? (
+                    <div style={{ fontSize: 11, color: 'var(--text-dim)', textAlign: 'center', margin: 'auto' }}>
+                      No Timers
+                    </div>
+                  ) : (
+                    timers.map((timer, idx) => (
+                      <div key={idx} style={{ background: 'var(--warning-light)', border: '1px solid var(--warning-border)', padding: '4px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: '#92400e' }}>
+                        {timer}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Background Worker Threads */}
+              <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border-light)', borderRadius: 8, padding: 10, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6, color: 'var(--text-main)', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>libuv Pool</span>
+                  <span className="badge" style={{ fontSize: 10 }}>4 Thr</span>
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 6, padding: 6, minHeight: 90 }}>
+                  {workers.map((w, idx) => (
+                    <div key={idx} style={{ padding: '4px 6px', borderRadius: 4, fontSize: 10.5, background: w.includes('Hashing') ? '#fee2e2' : 'var(--bg-subtle)', color: w.includes('Hashing') ? '#991b1b' : 'var(--text-muted)', fontWeight: w.includes('Hashing') ? 700 : 500 }}>
+                      {w}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Objectives, Bullets, Compact Node.js Terminal & Actions */}
+          <div className="workbench-side-panel">
+            {/* Level Tabs */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {EVENT_LOOP_LEVELS.map((lvl, idx) => (
+                <button
+                  key={lvl.id}
+                  className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setLevelIdx(idx)}
+                  style={{ borderRadius: 9999, padding: '3px 9px', fontSize: 11 }}
+                >
+                  Level {lvl.id}
+                </button>
+              ))}
+            </div>
+
+            {/* Bullets & Goal Box */}
+            <div className="level-bullets-box">
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {currentLevel.subtitle}
+              </div>
+              <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-main)' }}>
+                {currentLevel.title}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                {currentLevel.goalDescription}
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                <button className="btn btn-primary btn-sm" onClick={stepNext} style={{ fontSize: 11, padding: '4px 10px' }}>
+                  Step Next Line →
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  {showHint ? 'Hide Hint' : 'Hint'}
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={autoPlaySolution} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  Run All
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  Reset
+                </button>
+              </div>
+
+              {showHint && (
+                <div style={{ marginTop: 4, padding: '6px 8px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 11.5, color: '#92400e' }}>
+                  <strong>Hint: </strong>{currentLevel.hint}
+                </div>
+              )}
+            </div>
+
+            {/* Compact Authentic macOS Terminal Standard Output */}
+            <div className="terminal-window" style={{ minHeight: 140 }}>
+              <div className="terminal-header">
+                <div className="terminal-dots">
+                  <span className="dot dot-red" />
+                  <span className="dot dot-yellow" />
+                  <span className="dot dot-green" />
+                </div>
+                <span className="terminal-title" style={{ fontSize: 10.5 }}>
+                  <TerminalIcon size={11} style={{ color: '#38bdf8' }} />
+                  NODE.JS PROCESS STDOUT
+                </span>
+                <div style={{ width: 28 }} />
+              </div>
+
+              <div className="terminal-body" style={{ maxHeight: 110, overflowY: 'auto', fontSize: 11.5, padding: '8px 10px' }}>
+                {stdout.length === 0 ? (
+                  <div style={{ color: '#71717a', fontStyle: 'italic' }}>
+                    Click "Step Next Line" above to run instructions and stream stdout.
+                  </div>
+                ) : (
+                  stdout.map((line, idx) => (
+                    <div key={idx} className="terminal-line output">
+                      <span className="glyph" style={{ color: '#4ade80' }}>→</span>
+                      <span style={{ color: '#f4f4f5' }}>{line}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Level Completion Status */}
+            {levelWon && (
+              <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: '10px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: 'var(--success)', fontSize: 12 }}>Level Completed!</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>You observed exact queue drainage order.</div>
+                </div>
+                {levelIdx < EVENT_LOOP_LEVELS.length - 1 ? (
+                  <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)} style={{ fontSize: 11, padding: '4px 10px' }}>
+                    Next Level →
+                  </button>
+                ) : (
+                  <span className="badge badge-success">Mastered!</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 2. BOTTOM SECTION: Scroll for Deep Architectural Mechanics & Incident Story */}
+      <div className="lab-lesson-bottom">
+        {/* Left Card: Event Loop Phase Concept */}
+        <div className="lesson-objective-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--primary)', marginBottom: 4 }}>
+            V8 &amp; libuv Runtime Architecture
+          </div>
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            Microtasks vs Macrotasks Execution Semantics
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
+            {currentLevel.concept}
+          </p>
+
+          <div style={{ background: '#0f172a', padding: 14, borderRadius: 10, fontFamily: 'var(--font-mono)', fontSize: 11.5, color: '#e2e8f0', lineHeight: 1.5 }}>
+            <div style={{ color: '#38bdf8', marginBottom: 6, fontWeight: 700 }}>libuv Loop Phases in Sequence:</div>
+            <div>1. [Timers]        setTimeout / setInterval expired callbacks</div>
+            <div>2. [Pending I/O]   OS socket / filesystem callbacks</div>
+            <div>3. [Idle/Prepare]  Internal loop bookkeeping</div>
+            <div>4. [Poll]          Wait for new incoming I/O events</div>
+            <div>5. [Check]         setImmediate callbacks</div>
+            <div>6. [Close]         socket.on('close') cleanup</div>
+            <div style={{ color: '#4ade80', marginTop: 4 }}>* Microtasks (Promises &amp; nextTick) drain between EVERY single step.</div>
           </div>
         </div>
 
-        {/* Authentic macOS Terminal Standard Output */}
-        <div className="terminal-window" style={{ marginTop: 16 }}>
-          <div className="terminal-header">
-            <div className="terminal-dots">
-              <span className="dot dot-red" />
-              <span className="dot dot-yellow" />
-              <span className="dot dot-green" />
-            </div>
-            <span className="terminal-title">
-              <TerminalIcon size={12} style={{ color: '#38bdf8' }} />
-              NODE.JS PROCESS STDOUT — zsh 80x24
-            </span>
-            <div style={{ width: 36 }} />
+        {/* Right Card: Production Incident Story */}
+        <div className="lesson-concepts-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#dc2626', marginBottom: 4 }}>
+            Production War Story
           </div>
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            The Event Loop Starvation Outage
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
+            {currentLevel.story}
+          </p>
 
-          <div className="terminal-body" style={{ minHeight: 90, maxHeight: 160 }}>
-            {stdout.length === 0 ? (
-              <div style={{ color: '#71717a', fontStyle: 'italic', padding: '6px 0' }}>
-                Waiting for execution output... Click "Execute Next Step" to stream logs.
-              </div>
-            ) : (
-              stdout.map((line, idx) => (
-                <div key={idx} className="terminal-line output">
-                  <span className="glyph" style={{ color: '#4ade80' }}>→</span>
-                  <span style={{ color: '#f4f4f5' }}>{line}</span>
-                </div>
-              ))
-            )}
+          <div style={{ background: 'var(--bento-peach-bg)', border: '1.5px solid var(--bento-peach-border)', padding: 12, borderRadius: 10, fontSize: 12.5, color: 'var(--bento-peach-text)', lineHeight: 1.5 }}>
+            <strong>Systems Invariant: </strong> Because JavaScript executes on a single main thread, any CPU-intensive synchronous task (such as recursive JSON parsing, un-indexed filtering, or cryptographic hashing) freezes all timers, I/O polling, and incoming HTTP requests until it yields.
           </div>
         </div>
       </div>

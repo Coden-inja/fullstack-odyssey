@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Terminal as TerminalIcon } from 'lucide-react';
 
 interface CicdLevel {
   id: number;
@@ -114,7 +115,6 @@ export const CicdPipelineLab: React.FC = () => {
   const runPipeline = () => {
     setPipelineSteps(prev => prev.map(s => ({ ...s, status: 'idle' })));
 
-    // Step 1: Typecheck
     setTimeout(() => {
       setPipelineSteps(prev => [
         { ...prev[0], status: 'passed' },
@@ -123,7 +123,6 @@ export const CicdPipelineLab: React.FC = () => {
         prev[3]
       ]);
 
-      // Step 2: Tests
       setTimeout(() => {
         if (simulateFailure) {
           setPipelineSteps(prev => [
@@ -142,7 +141,6 @@ export const CicdPipelineLab: React.FC = () => {
           prev[3]
         ]);
 
-        // Step 3: Docker Build
         setTimeout(() => {
           setPipelineSteps(prev => [
             prev[0],
@@ -151,7 +149,6 @@ export const CicdPipelineLab: React.FC = () => {
             { ...prev[3], status: 'running' }
           ]);
 
-          // Step 4: Edge Cutover
           setTimeout(() => {
             setPipelineSteps(prev => [
               prev[0],
@@ -180,167 +177,250 @@ export const CicdPipelineLab: React.FC = () => {
   };
 
   return (
-    <div className="lab-split-container">
-      {/* LEFT PANEL: Guided Lesson */}
-      <div className="guide-panel">
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {CICD_LEVELS.map((lvl, idx) => (
-            <button
-              key={lvl.id}
-              className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
-              onClick={() => setLevelIdx(idx)}
-            >
-              Level {lvl.id}
-            </button>
-          ))}
-        </div>
+    <div className="lab-interactive-top-layout">
+      {/* 1. TOP SECTION: Visual Pipeline DAG & Companion Runner Controls */}
+      <div className="lab-workbench-top">
+        <div className="lab-workbench-grid">
+          {/* LEFT: Live Pipeline Stages & Traffic Cutover */}
+          <div className="workbench-main-visual">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid var(--border-light)' }}>
+              <div>
+                <div className="canvas-title" style={{ fontSize: 16, marginBottom: 2 }}>
+                  GitHub Actions CI/CD Pipeline &amp; Edge Router
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Automated test gates, Docker build cache, and zero-downtime blue/green cutover.
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span className="badge badge-indigo">Ubuntu Runner</span>
+                <span className="badge">{trafficDistribution}</span>
+              </div>
+            </div>
 
-        <div className="lesson-card" style={{ marginBottom: 0 }}>
-          <div className="lesson-step-header">
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+            {/* Pipeline Stage Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+              {pipelineSteps.map((step, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    background: step.status === 'passed' ? '#ecfdf5' : step.status === 'failed' ? '#fee2e2' : step.status === 'running' ? '#fef3c7' : '#ffffff',
+                    border: `1.5px solid ${step.status === 'passed' ? '#10b981' : step.status === 'failed' ? '#ef4444' : step.status === 'running' ? '#f59e0b' : 'var(--border-light)'}`,
+                    borderRadius: 8,
+                    padding: 8,
+                    textAlign: 'center'
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)', marginBottom: 2 }}>
+                    {step.name}
+                  </div>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', color: step.status === 'passed' ? '#059669' : step.status === 'failed' ? '#dc2626' : step.status === 'running' ? '#d97706' : 'var(--text-dim)' }}>
+                    {step.status === 'running' ? 'Running...' : step.status}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Edge Deployment Switcher Visualizer */}
+            <div style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 10, padding: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-main)' }}>Edge Traffic Router</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{trafficDistribution}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <span className={`badge ${activeDeployment === 'A' ? 'badge-indigo' : ''}`} style={{ fontSize: 10 }}>Deploy A (v1.0)</span>
+                <span className={`badge ${activeDeployment === 'B' ? 'badge-success' : ''}`} style={{ fontSize: 10 }}>Deploy B (v2.0)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Objectives, Bullets, Compact Runner Terminal & Actions */}
+          <div className="workbench-side-panel">
+            {/* Level Tabs */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {CICD_LEVELS.map((lvl, idx) => (
+                <button
+                  key={lvl.id}
+                  className={`btn btn-sm ${levelIdx === idx ? 'btn-primary' : 'btn-outline'}`}
+                  onClick={() => setLevelIdx(idx)}
+                  style={{ borderRadius: 9999, padding: '3px 9px', fontSize: 11 }}
+                >
+                  Level {lvl.id}
+                </button>
+              ))}
+            </div>
+
+            {/* Bullets & Goal Box */}
+            <div className="level-bullets-box">
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 {currentLevel.subtitle}
               </div>
-              <h2 className="lesson-step-title">{currentLevel.title}</h2>
+              <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-main)' }}>
+                {currentLevel.title}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                {currentLevel.goalDescription}
+              </div>
+
+              {/* Toggles */}
+              {currentLevel.id === 1 && (
+                <label style={{ fontSize: 11.5, fontWeight: 600, color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <input
+                    type="checkbox"
+                    checked={simulateFailure}
+                    onChange={(e) => setSimulateFailure(e.target.checked)}
+                  />
+                  Simulate Broken Test (throw Error)
+                </label>
+              )}
+
+              {currentLevel.id === 2 && (
+                <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-main)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                  <input
+                    type="checkbox"
+                    checked={useCache}
+                    onChange={(e) => setUseCache(e.target.checked)}
+                  />
+                  Use Docker Layer Cache (CACHED)
+                </label>
+              )}
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                <button className="btn btn-primary btn-sm" onClick={runPipeline} style={{ fontSize: 11, padding: '4px 10px' }}>
+                  Run Pipeline
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  {showHint ? 'Hide Hint' : 'Hint'}
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={autoPlaySolution} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  Auto-Play
+                </button>
+                <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)} style={{ fontSize: 11, padding: '4px 8px' }}>
+                  Reset
+                </button>
+              </div>
+
+              {showHint && (
+                <div style={{ marginTop: 4, padding: '6px 8px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 11.5, color: '#92400e' }}>
+                  <strong>Hint: </strong>{currentLevel.hint}
+                </div>
+              )}
             </div>
-            {levelWon && <span className="badge badge-success">Passed</span>}
-          </div>
 
-          <p className="lesson-explanation">{currentLevel.story}</p>
+            {/* Compact Authentic macOS Runner Terminal */}
+            <div className="terminal-window" style={{ minHeight: 140 }}>
+              <div className="terminal-header">
+                <div className="terminal-dots">
+                  <span className="dot dot-red" />
+                  <span className="dot dot-yellow" />
+                  <span className="dot dot-green" />
+                </div>
+                <span className="terminal-title" style={{ fontSize: 10.5 }}>
+                  <TerminalIcon size={11} style={{ color: '#38bdf8' }} />
+                  GITHUB ACTIONS RUNNER CONSOLE
+                </span>
+                <div style={{ width: 28 }} />
+              </div>
 
-          <div style={{ background: 'var(--bg-subtle)', padding: '12px 14px', borderRadius: 6, fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            <strong style={{ color: 'var(--text-main)' }}>Key Concept: </strong>
-            {currentLevel.concept}
-          </div>
-
-          <div className="lesson-goal-box">
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 2 }}>Your Objective:</div>
-              <div>{currentLevel.goalDescription}</div>
+              <div className="terminal-body" style={{ maxHeight: 110, overflowY: 'auto', fontSize: 11.5, padding: '8px 10px' }}>
+                {pipelineSteps.every(s => s.status === 'idle') ? (
+                  <div style={{ color: '#71717a', fontStyle: 'italic' }}>
+                    Runner idle. Click "Run Pipeline" above to trigger workflow dispatch.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div className="terminal-line" style={{ color: '#38bdf8' }}>
+                      <span className="glyph">→</span>
+                      <span>Run tsc --noEmit: Passed (0 errors)</span>
+                    </div>
+                    {pipelineSteps[1].status === 'failed' && (
+                      <div className="terminal-line" style={{ color: '#f87171' }}>
+                        <span className="glyph">✗</span>
+                        <span>Vitest: 1 failed (AssertionError). Pipeline aborted!</span>
+                      </div>
+                    )}
+                    {pipelineSteps[1].status === 'passed' && (
+                      <div className="terminal-line" style={{ color: '#4ade80' }}>
+                        <span className="glyph">✓</span>
+                        <span>Vitest: 14/14 tests passed</span>
+                      </div>
+                    )}
+                    {pipelineSteps[2].status === 'passed' && (
+                      <div className="terminal-line" style={{ color: '#cbd5e1' }}>
+                        <span className="glyph">•</span>
+                        <span>Docker build: {useCache ? 'Using cache (4s)' : 'Building layers from scratch (180s)'}</span>
+                      </div>
+                    )}
+                    {pipelineSteps[3].status === 'passed' && (
+                      <div className="terminal-line" style={{ color: '#4ade80' }}>
+                        <span className="glyph">✓</span>
+                        <span>Zero-downtime cutover: 100% traffic on Deployment B</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Interactive Pipeline Toggles */}
-          <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <label style={{ fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input
-                type="checkbox"
-                checked={simulateFailure}
-                onChange={(e) => setSimulateFailure(e.target.checked)}
-              />
-              Simulate Broken Test (Quality Gate Trigger)
-            </label>
-            <label style={{ fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input
-                type="checkbox"
-                checked={useCache}
-                onChange={(e) => setUseCache(e.target.checked)}
-              />
-              Use Docker Layer Caching (Fast Builds)
-            </label>
-          </div>
-
-          <div className="lesson-actions">
-            <button className="btn btn-primary btn-sm" onClick={runPipeline}>
-              Run Pipeline →
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={() => setShowHint(!showHint)}>
-              {showHint ? 'Hide Hint' : 'Need a Hint?'}
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={autoPlaySolution}>
-              Show Solution
-            </button>
-            <button className="btn btn-outline btn-sm" onClick={() => resetLevel(levelIdx)}>
-              Reset
-            </button>
-          </div>
-
-          {showHint && (
-            <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--warning-light)', border: '1px solid var(--warning-border)', borderRadius: 6, fontSize: 13, color: '#92400e' }}>
-              <strong>Hint: </strong>{currentLevel.hint}
-            </div>
-          )}
-        </div>
-
-        {levelWon && (
-          <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: 14, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontWeight: 700, color: 'var(--success)' }}>Level Completed!</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>You mastered automated quality gates and zero-downtime cutovers.</div>
-            </div>
-            {levelIdx < CICD_LEVELS.length - 1 ? (
-              <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)}>
-                Next Level →
-              </button>
-            ) : (
-              <span className="badge badge-success">Module Mastered!</span>
+            {/* Level Completion Status */}
+            {levelWon && (
+              <div style={{ background: 'var(--success-light)', border: '1px solid var(--success-border)', padding: '10px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontWeight: 700, color: 'var(--success)', fontSize: 12 }}>Level Completed!</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>You mastered CI/CD deployment safeguards.</div>
+                </div>
+                {levelIdx < CICD_LEVELS.length - 1 ? (
+                  <button className="btn btn-success btn-sm" onClick={() => setLevelIdx(levelIdx + 1)} style={{ fontSize: 11, padding: '4px 10px' }}>
+                    Next Level →
+                  </button>
+                ) : (
+                  <span className="badge badge-success">Mastered!</span>
+                )}
+              </div>
             )}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* RIGHT PANEL: Live Pipeline & Edge Cutover Visualizer */}
-      <div className="canvas-panel">
-        <div className="canvas-header">
-          <div>
-            <div className="canvas-title">GitHub Actions Pipeline & Edge Distribution</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              Watch sequential quality checks execute and route traffic to healthy instances.
-            </div>
+      {/* 2. BOTTOM SECTION: Scroll for Deep Architectural Mechanics & Incident Story */}
+      <div className="lab-lesson-bottom">
+        {/* Left Card: CI/CD Pipeline Architecture */}
+        <div className="lesson-objective-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--primary)', marginBottom: 4 }}>
+            DevOps &amp; Infrastructure
           </div>
-          <div>
-            <span className={`badge ${activeDeployment === 'B' ? 'badge-success' : 'badge-indigo'}`}>
-              Active Version: {activeDeployment === 'B' ? 'v2.0 (New)' : 'v1.0 (Live)'}
-            </span>
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            Deterministic Build Gates &amp; Edge Cutover
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
+            {currentLevel.concept}
+          </p>
+
+          <div style={{ background: '#0f172a', padding: 14, borderRadius: 10, fontFamily: 'var(--font-mono)', fontSize: 11.5, color: '#e2e8f0', lineHeight: 1.5 }}>
+            <div style={{ color: '#38bdf8', marginBottom: 6, fontWeight: 700 }}>Container Multi-Stage Optimization:</div>
+            <div>FROM node:20-alpine AS deps (Layer Cached)</div>
+            <div>COPY package.json package-lock.json ./</div>
+            <div>RUN npm ci --prefer-offline</div>
+            <div>COPY . .</div>
+            <div>RUN npm run build</div>
           </div>
         </div>
 
-        {/* Step-by-Step Pipeline Boxes */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-          {pipelineSteps.map((step) => {
-            const isPassed = step.status === 'passed';
-            const isRunning = step.status === 'running';
-            const isFailed = step.status === 'failed';
-
-            return (
-              <div
-                key={step.name}
-                style={{
-                  background: isRunning ? 'var(--primary-light)' : isPassed ? 'var(--success-light)' : isFailed ? 'var(--danger-light)' : '#ffffff',
-                  border: `1px solid ${isRunning ? 'var(--primary)' : isPassed ? 'var(--success-border)' : isFailed ? 'var(--danger-border)' : 'var(--border-light)'}`,
-                  borderRadius: 8,
-                  padding: '12px 16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontWeight: 600, fontSize: 13, color: isFailed ? 'var(--danger)' : isPassed ? 'var(--success)' : 'var(--text-main)' }}>
-                    {step.name}
-                  </span>
-                </div>
-
-                <div>
-                  {isRunning && <span className="badge badge-indigo">Running...</span>}
-                  {isPassed && <span className="badge badge-success">Passed ✓</span>}
-                  {isFailed && <span className="badge badge-danger">Halted: Test Failed ✕</span>}
-                  {step.status === 'idle' && <span className="badge">Waiting</span>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Live Anycast Traffic Status */}
-        <div style={{ background: '#0f172a', padding: 16, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc' }}>
-          <div style={{ color: '#38bdf8', marginBottom: 6, fontWeight: 700 }}>Edge Anycast Routing Engine:</div>
-          <div style={{ color: '#e2e8f0', marginBottom: 4 }}>
-            Status: <span style={{ color: activeDeployment === 'B' ? '#34d399' : '#38bdf8', fontWeight: 600 }}>{trafficDistribution}</span>
+        {/* Right Card: Production Incident Story */}
+        <div className="lesson-concepts-card">
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#dc2626', marginBottom: 4 }}>
+            Production War Story
           </div>
-          <div style={{ color: '#94a3b8', fontSize: 11 }}>
-            Global Edge Points (SFO, LHR, HND, SYD) verified healthy. Zero dropped TCP packets.
+          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 10, color: 'var(--text-main)' }}>
+            The Friday Afternoon Outage
+          </h3>
+          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 14 }}>
+            {currentLevel.story}
+          </p>
+
+          <div style={{ background: 'var(--bento-peach-bg)', border: '1.5px solid var(--bento-peach-border)', padding: 12, borderRadius: 10, fontSize: 12.5, color: 'var(--bento-peach-text)', lineHeight: 1.5 }}>
+            <strong>Systems Invariant: </strong> Deployments should never modify production in-place. Blue/Green and ephemeral container deployments verify health checks on a separate container before the load balancer flips traffic, eliminating 502 Bad Gateway downtime.
           </div>
         </div>
       </div>
