@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Terminal as TerminalIcon, CornerDownLeft, Copy, Check } from 'lucide-react';
 
 interface CommitNode {
   id: string; // e.g. "C0", "C1", "C2"
@@ -722,12 +723,34 @@ export const GitDagLab: React.FC = () => {
           </div>
         )}
 
-        {/* Interactive CLI Terminal */}
-        <div className="sim-terminal" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ flex: 1, overflowY: 'auto', maxHeight: 120, display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
+        {/* Authentic macOS Interactive CLI Terminal */}
+        <div className="terminal-window" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 220 }}>
+          <div className="terminal-header">
+            <div className="terminal-dots">
+              <span className="dot dot-red" />
+              <span className="dot dot-yellow" />
+              <span className="dot dot-green" />
+            </div>
+            <span className="terminal-title">
+              <TerminalIcon size={12} style={{ color: '#38bdf8' }} />
+              GIT REPO TERMINAL — {head.branch ? `(${head.branch})` : `(HEAD detached at ${head.commit})`}
+            </span>
+            <div style={{ width: 36 }} />
+          </div>
+
+          <div className="terminal-body" style={{ flex: 1, maxHeight: 150, overflowY: 'auto' }}>
             {terminalHistory.map((item, idx) => (
-              <div key={idx} style={{ color: item.startsWith('$') ? '#38bdf8' : item.startsWith('Verification') ? '#34d399' : '#e2e8f0', fontSize: 12 }}>
-                {item}
+              <div 
+                key={idx} 
+                className="terminal-line" 
+                style={{ 
+                  color: item.startsWith('$') ? '#38bdf8' : item.startsWith('Verification Passed') ? '#4ade80' : item.startsWith('Check Failed') ? '#f87171' : '#cbd5e1' 
+                }}
+              >
+                <span className="glyph" style={{ color: item.startsWith('$') ? '#38bdf8' : item.startsWith('Verification') ? '#4ade80' : item.startsWith('Check') ? '#f87171' : '#a1a1aa' }}>
+                  {item.startsWith('$') ? '→' : item.startsWith('Verification') ? '✓' : item.startsWith('Check') ? '✗' : '•'}
+                </span>
+                <span>{item.startsWith('$ ') ? item.slice(2) : item}</span>
               </div>
             ))}
           </div>
@@ -738,17 +761,19 @@ export const GitDagLab: React.FC = () => {
               executeCommand(inputCmd);
               setInputCmd('');
             }}
-            className="sim-terminal-row"
+            className="terminal-prompt-row"
+            style={{ margin: '0 12px 12px' }}
           >
-            <span className="sim-terminal-prompt">$</span>
+            <span className="terminal-prompt-glyph">→</span>
             <input
               type="text"
-              className="sim-terminal-input"
+              className="terminal-prompt-input"
               value={inputCmd}
               onChange={(e) => setInputCmd(e.target.value)}
-              placeholder="e.g. git commit"
+              placeholder="Type command (e.g. git commit, git branch bugfix)..."
             />
-            <button type="submit" className="btn btn-primary btn-sm">
+            <button type="submit" className="btn btn-sm btn-primary" style={{ padding: '4px 12px', fontSize: 11, borderRadius: 6 }}>
+              <CornerDownLeft size={11} />
               Run
             </button>
           </form>
