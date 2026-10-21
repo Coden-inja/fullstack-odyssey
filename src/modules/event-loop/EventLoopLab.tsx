@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Terminal as TerminalIcon } from 'lucide-react';
 
 interface EventLoopLevel {
   id: number;
@@ -426,18 +427,35 @@ export const EventLoopLab: React.FC = () => {
           </div>
         </div>
 
-        {/* Terminal Standard Output */}
-        <div style={{ marginTop: 16, background: '#0f172a', padding: 14, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc' }}>
-          <div style={{ color: '#94a3b8', marginBottom: 6, fontWeight: 600 }}>STDOUT (Console Output):</div>
-          {stdout.length === 0 ? (
-            <div style={{ color: '#64748b' }}>Waiting for execution output...</div>
-          ) : (
-            stdout.map((line, idx) => (
-              <div key={idx} style={{ color: '#38bdf8' }}>
-                &gt; {line}
+        {/* Authentic macOS Terminal Standard Output */}
+        <div className="terminal-window" style={{ marginTop: 16 }}>
+          <div className="terminal-header">
+            <div className="terminal-dots">
+              <span className="dot dot-red" />
+              <span className="dot dot-yellow" />
+              <span className="dot dot-green" />
+            </div>
+            <span className="terminal-title">
+              <TerminalIcon size={12} style={{ color: '#38bdf8' }} />
+              NODE.JS PROCESS STDOUT — zsh 80x24
+            </span>
+            <div style={{ width: 36 }} />
+          </div>
+
+          <div className="terminal-body" style={{ minHeight: 90, maxHeight: 160 }}>
+            {stdout.length === 0 ? (
+              <div style={{ color: '#71717a', fontStyle: 'italic', padding: '6px 0' }}>
+                Waiting for execution output... Click "Execute Next Step" to stream logs.
               </div>
-            ))
-          )}
+            ) : (
+              stdout.map((line, idx) => (
+                <div key={idx} className="terminal-line output">
+                  <span className="glyph" style={{ color: '#4ade80' }}>→</span>
+                  <span style={{ color: '#f4f4f5' }}>{line}</span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>

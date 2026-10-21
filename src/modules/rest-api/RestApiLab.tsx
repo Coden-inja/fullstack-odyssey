@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Terminal as TerminalIcon } from 'lucide-react';
 
 interface RestApiLevel {
   id: number;
@@ -329,25 +330,44 @@ export const RestApiLab: React.FC = () => {
           </div>
         </div>
 
-        {/* Wire Protocol Terminal */}
-        <div style={{ flex: 1, background: '#0f172a', padding: 16, borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 12, color: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ color: '#38bdf8', marginBottom: 8, fontWeight: 700 }}>Raw Network Frames:</div>
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {/* Authentic macOS Wire Protocol Terminal */}
+        <div className="terminal-window" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <div className="terminal-header">
+            <div className="terminal-dots">
+              <span className="dot dot-red" />
+              <span className="dot dot-yellow" />
+              <span className="dot dot-green" />
+            </div>
+            <span className="terminal-title">
+              <TerminalIcon size={12} style={{ color: '#38bdf8' }} />
+              RAW TCP SOCKET FRAMES — HTTP/1.1 WIRE
+            </span>
+            <div style={{ width: 36 }} />
+          </div>
+
+          <div className="terminal-body" style={{ flex: 1, overflowY: 'auto', maxHeight: 220 }}>
             {wireLog.length === 0 ? (
-              <div style={{ color: '#64748b' }}>// Click 'Send HTTP Request' to inspect socket communication</div>
+              <div style={{ color: '#71717a', fontStyle: 'italic', padding: '6px 0' }}>
+                Click "Send HTTP Request" above to stream raw TCP socket frames...
+              </div>
             ) : (
               wireLog.map((line, idx) => (
-                <div key={idx} style={{ color: line.startsWith('>') ? '#38bdf8' : line.startsWith('< HTTP/1.1 2') ? '#34d399' : line.startsWith('< HTTP/1.1 3') ? '#818cf8' : '#e2e8f0' }}>
-                  {line}
+                <div key={idx} className="terminal-line" style={{ color: line.startsWith('>') ? '#38bdf8' : line.startsWith('< HTTP/1.1 2') ? '#4ade80' : line.startsWith('< HTTP/1.1 3') ? '#818cf8' : '#f4f4f5' }}>
+                  <span className="glyph" style={{ color: line.startsWith('>') ? '#38bdf8' : line.startsWith('< HTTP/1.1 2') ? '#4ade80' : '#a1a1aa' }}>
+                    {line.startsWith('>') ? '→' : line.startsWith('< HTTP') ? '✓' : '•'}
+                  </span>
+                  <span>{line}</span>
                 </div>
               ))
             )}
           </div>
 
           {responseBody && (
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #334155' }}>
-              <div style={{ color: '#34d399', marginBottom: 4, fontWeight: 700 }}>Response Payload:</div>
-              <pre style={{ margin: 0, color: '#e2e8f0' }}>{responseBody}</pre>
+            <div style={{ padding: '10px 16px', background: 'rgba(255, 255, 255, 0.04)', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <div style={{ color: '#4ade80', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+                Response Body Payload:
+              </div>
+              <pre style={{ margin: 0, color: '#f4f4f5', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{responseBody}</pre>
             </div>
           )}
         </div>
