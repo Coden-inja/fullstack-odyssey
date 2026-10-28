@@ -17,6 +17,8 @@ interface WireRendererProps {
   justConnectedId?: string | null;
   activeWireId?: string | null;
   layer?: 'wires' | 'packets'; // packets render in a second SVG above the cards
+  flows?: Record<string, number>; // crowd req/s per wire
+  dotScale?: number; // req/s per moving dot
 }
 
 const PACKET_COLOR: Record<string, string> = {
@@ -52,7 +54,9 @@ export const WireRenderer: React.FC<WireRendererProps> = ({
   portPositions = {},
   justConnectedId,
   activeWireId,
-  layer = 'wires'
+  layer = 'wires',
+  flows,
+  dotScale = 1
 }) => {
   const getPortPosition = (nodeId: string, portId: string, isOutput: boolean) => {
     const dir = isOutput ? 'out' : 'in';
@@ -90,6 +94,15 @@ export const WireRenderer: React.FC<WireRendererProps> = ({
           <g key={wire.id} className={cls}>
             <path d={d} className="wire-halo" />
             <path d={d} className="wire-line" />
+            {flows && (flows[wire.id] ?? 0) > 0 &&
+              (() => {
+                const n = Math.min(14, Math.max(1, Math.round((flows[wire.id] ?? 0) / dotScale)));
+                return Array.from({ length: n }, (_, i) => (
+                  <circle key={i} r="2.6" className="crowd-dot">
+                    <animateMotion dur="2.4s" repeatCount="indefinite" begin={`-${((i / n) * 2.4).toFixed(2)}s`} path={d} />
+                  </circle>
+                ));
+              })()}
             <path
               d={d}
               className="wire-hit-zone"

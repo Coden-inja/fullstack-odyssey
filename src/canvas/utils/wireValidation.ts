@@ -1,4 +1,5 @@
 import { CanvasNode } from '../types';
+import { PERSONA } from '../data/story';
 
 export interface WireValidationResult {
   valid: boolean;
@@ -26,7 +27,7 @@ export function validateSystemWire(
     return {
       valid: false,
       warning:
-        'Nothing calls Bob’s browser. The browser always starts the conversation; replies come back along the wire it opened.'
+        `Nothing calls ${PERSONA.name}’s browser. The browser always starts the conversation; replies come back along the wire it opened.`
     };
   }
 
@@ -34,12 +35,12 @@ export function validateSystemWire(
     return {
       valid: false,
       warning:
-        'Bob’s browser can’t talk to PostgreSQL directly: the database only accepts connections from your own servers. Opening it to the internet would let anyone read every row.'
+        `${PERSONA.name}’s browser can’t talk to PostgreSQL directly: the database only accepts connections from your own servers. Opening it to the internet would let anyone read every row.`
     };
   }
 
   if (s === 'browser' && t !== 'server' && t !== 'balancer') {
-    return { valid: false, warning: `Bob’s browser speaks HTTP to a server. It can’t talk to ${targetNode.title} directly.` };
+    return { valid: false, warning: `${PERSONA.name}’s browser speaks HTTP to a server. It can’t talk to ${targetNode.title} directly.` };
   }
 
   if (s === 'balancer' && t !== 'server') {

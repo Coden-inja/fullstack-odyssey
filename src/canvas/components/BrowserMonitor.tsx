@@ -1,7 +1,8 @@
 import React from 'react';
-import { Lock, RotateCw, Mail, Code2, Loader2 } from 'lucide-react';
+import { Lock, RotateCw, MessageSquare, Code2, Loader2, TrainFront } from 'lucide-react';
 import { CanvasNode, ClientAction, LevelMechanics } from '../types';
-import { BOB_SID } from '../sim/engine';
+import { SID } from '../sim/engine';
+import { BERTHS_TAKEN, DEFAULT_BERTH, PERSONA, TRIP, berthType, inr } from '../data/story';
 
 export interface NetworkEntry {
   id: number;
@@ -12,55 +13,70 @@ export interface NetworkEntry {
 }
 
 export interface ClientState {
-  seat: string;
+  berth: string;
   sending: null | { action: ClientAction; startedAt: number };
   last?: { action: ClientAction; status: number; statusText: string; title: string; detail: string; latencyMs: number };
   network: NetworkEntry[];
-  freeSeats: number;
+  available: number;
   booked: string[];
-  emails: Array<{ id: number; text: string }>;
+  messages: Array<{ id: number; text: string }>;
 }
 
 export const initialClient = (): ClientState => ({
-  seat: '14C',
+  berth: DEFAULT_BERTH,
   sending: null,
   network: [],
-  freeSeats: 1204,
+  available: 12,
   booked: [],
-  emails: []
+  messages: []
 });
 
-const ROWS = ['14', '15'];
-const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-const SOLD = new Set(['14B', '14E', '15A', '15F', '15G']);
+export type AvatarState = 'idle' | 'waiting' | 'booked' | 'gaveup' | 'error';
+
+export interface CrowdView {
+  avatars: AvatarState[];
+  arriving: number;
+  waiting: number;
+  booked: number;
+  gaveUp: number;
+}
+
+const BAYS = [
+  ['1', '2', '3', '4', '5', '6', '7', '8'],
+  ['9', '10', '11', '12', '13', '14', '15', '16']
+];
+const SHORT: Record<string, string> = { Lower: 'L', Middle: 'M', Upper: 'U', 'Side lower': 'SL', 'Side upper': 'SU' };
 
 interface BrowserMonitorProps {
   node: CanvasNode;
   levelNumber: number;
   mechanics: LevelMechanics;
   client: ClientState;
+  crowd?: CrowdView;
   now: number;
   busyLabel?: string; // replaces the elapsed timer while a step-by-step request plays
   isPendingWireActive: boolean;
   onAction: (action: ClientAction) => void;
-  onSelectSeat: (seat: string) => void;
+  onSelectBerth: (berth: string) => void;
   onStartWire: (nodeId: string, portId: string, isOutput: boolean, e: React.MouseEvent) => void;
   onEndWire: (nodeId: string, portId: string) => void;
   onOpenCode: (nodeId: string) => void;
 }
 
 const statusTone = (s: number | null) => (s === null ? 'pending' : s >= 200 && s < 300 ? 'ok' : s >= 400 && s < 500 ? 'warn' : 'err');
+const fmtMs = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms} ms`);
 
 export const BrowserMonitor: React.FC<BrowserMonitorProps> = ({
   node,
   levelNumber,
   mechanics,
   client,
+  crowd,
   now,
   busyLabel,
   isPendingWireActive,
   onAction,
-  onSelectSeat,
+  onSelectBerth,
   onStartWire,
   onEndWire,
   onOpenCode
@@ -70,12 +86,42 @@ export const BrowserMonitor: React.FC<BrowserMonitorProps> = ({
   const showCookie = levelNumber >= 4;
   const showRefresh = !!mechanics.readHeavy || levelNumber >= 6;
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  const mine = client.booked.includes(client.berth);
 
   return (
-    <div
-      className={`bm ${isPendingWireActive ? 'is-wiring' : ''}`}
-      onMouseUp={() => isPendingWireActive && onEndWire(node.id, 'in')}
-    >
+    <div className={`bm ${isPendingWireActive ? 'is-wiring' : ''}`} onMouseUp={() => isPendingWireActive && onEndWire(node.id, 'in')}>
+      {crowd && (
+        <div className="crowd" onMouseDown={stop} title="Everyone else pressing Book right now. Each face is a share of the traffic.">
+          <div className="crowd-head">
+            <span>Others booking now</span>
+            <span className="crowd-legend">
+              <i className="av av-waiting" /> waiting <i className="av av-booked" /> booked <i className="av av-gaveup" /> gave up
+            </span>
+          </div>
+          <div className="crowd-faces">
+            {crowd.avatars.length === 0 ? (
+              <span className="crowd-empty">Only {PERSONA.name} right now</span>
+            ) : (
+              crowd.avatars.map((a, i) => <i key={i} className={`av av-${a}`} />)
+            )}
+          </div>
+          <div className="crowd-stats">
+            <span>
+              <b>{inr(crowd.arriving)}</b>/s arriving
+            </span>
+            <span className={crowd.waiting > 0 ? 'tone-warn' : ''}>
+              <b>{inr(crowd.waiting)}</b> waiting
+            </span>
+            <span className="tone-ok">
+              <b>{inr(crowd.booked)}</b>/s booked
+            </span>
+            <span className={crowd.gaveUp > 0 ? 'tone-err' : ''}>
+              <b>{inr(crowd.gaveUp)}</b>/s gave up
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="bm-bezel">
         <div className="bm-chrome">
           <span className="bm-dots">
@@ -84,7 +130,8 @@ export const BrowserMonitor: React.FC<BrowserMonitorProps> = ({
             <i />
           </span>
           <span className="bm-url">
-            <Lock size={10} /> tokyodome.tickets<span className="bm-url-path">/seats</span>
+            <Lock size={10} /> {TRIP.site}
+            <span className="bm-url-path">/tatkal</span>
           </span>
           <button className="bm-code-btn" title="See the code this button runs" onMouseDown={stop} onClick={() => onOpenCode(node.id)}>
             <Code2 size={12} />
@@ -92,57 +139,56 @@ export const BrowserMonitor: React.FC<BrowserMonitorProps> = ({
         </div>
 
         <div className="bm-page">
-          {client.emails.length > 0 && (
-            <div className="bm-email" key={client.emails[client.emails.length - 1].id}>
-              <Mail size={12} /> {client.emails[client.emails.length - 1].text}
+          {client.messages.length > 0 && (
+            <div className="bm-email" key={client.messages[client.messages.length - 1].id}>
+              <MessageSquare size={12} /> {client.messages[client.messages.length - 1].text}
             </div>
           )}
 
           <div className="bm-header">
             <div>
-              <div className="bm-brand">Tokyo Dome · Live 2026</div>
-              <div className="bm-sub">Arena seats · rows 14–15</div>
+              <div className="bm-brand">
+                <TrainFront size={14} /> {TRIP.brand} · Tatkal
+              </div>
+              <div className="bm-sub">
+                {TRIP.train} · {TRIP.from} → {TRIP.to} · coach {TRIP.coach} (3A)
+              </div>
             </div>
             <div className="bm-user">
-              Bob{showCookie && <span className="bm-cookie">cookie sid={BOB_SID}</span>}
+              {PERSONA.name}
+              {showCookie && <span className="bm-cookie">cookie sid={SID}</span>}
             </div>
           </div>
 
           {showRefresh && (
             <div className="bm-free">
               <span>
-                Free seats <strong>{client.freeSeats.toLocaleString('en-US')}</strong>
+                Availability <strong className="tone-ok">AVL {client.available}</strong>
               </span>
-              <button
-                className="bm-refresh"
-                disabled={busy}
-                onMouseDown={stop}
-                onClick={() => onAction('browse')}
-                title="Reload the seat map: GET /api/seats"
-              >
+              <button className="bm-refresh" disabled={busy} onMouseDown={stop} onClick={() => onAction('browse')} title="Check again: GET /api/availability">
                 <RotateCw size={12} className={busy && client.sending?.action === 'browse' ? 'spin' : ''} /> Refresh
               </button>
             </div>
           )}
 
           <div className="bm-seats" onMouseDown={stop}>
-            {ROWS.map((row) => (
-              <div className="bm-seat-row" key={row}>
-                <span className="bm-row-label">{row}</span>
-                {LETTERS.map((l) => {
-                  const id = row + l;
-                  const mine = client.booked.includes(id);
-                  const sold = SOLD.has(id);
-                  const selected = client.seat === id;
+            {BAYS.map((bay, b) => (
+              <div className="bm-seat-row" key={b}>
+                <span className="bm-row-label">bay {b + 1}</span>
+                {bay.map((n) => {
+                  const own = client.booked.includes(n);
+                  const taken = BERTHS_TAKEN.has(n);
+                  const selected = client.berth === n;
                   return (
                     <button
-                      key={id}
-                      className={`bm-seat ${sold ? 'sold' : ''} ${mine ? 'mine' : ''} ${selected && !mine ? 'selected' : ''}`}
-                      disabled={sold || mine || busy}
-                      onClick={() => onSelectSeat(id)}
-                      title={sold ? `${id}: sold` : mine ? `${id}: yours` : `Seat ${id}`}
+                      key={n}
+                      className={`bm-seat ${taken ? 'sold' : ''} ${own ? 'mine' : ''} ${selected && !own ? 'selected' : ''}`}
+                      disabled={taken || own || busy}
+                      onClick={() => onSelectBerth(n)}
+                      title={taken ? `Berth ${n}: booked` : own ? `Berth ${n}: yours` : `Berth ${n} · ${berthType(n)}`}
                     >
-                      {l}
+                      <span className="bm-berth-n">{n}</span>
+                      <span className="bm-berth-t">{SHORT[berthType(n)]}</span>
                     </button>
                   );
                 })}
@@ -150,20 +196,17 @@ export const BrowserMonitor: React.FC<BrowserMonitorProps> = ({
             ))}
           </div>
 
-          <button
-            className={`bm-cta ${busy ? 'is-busy' : ''}`}
-            disabled={busy || client.booked.includes(client.seat)}
-            onMouseDown={stop}
-            onClick={() => onAction('buy')}
-          >
+          <button className={`bm-cta ${busy ? 'is-busy' : ''}`} disabled={busy || mine} onMouseDown={stop} onClick={() => onAction('buy')}>
             {busy ? (
               <>
                 <Loader2 size={14} className="spin" /> {busyLabel ?? `Waiting for the response… ${(elapsed / 1000).toFixed(1)} s`}
               </>
-            ) : client.booked.includes(client.seat) ? (
-              <>Seat {client.seat} is yours: pick another</>
+            ) : mine ? (
+              <>Berth {client.berth} is yours: pick another</>
             ) : (
-              <>Reserve seat {client.seat} · $85</>
+              <>
+                Book berth {client.berth} ({berthType(client.berth)}) · ₹{inr(TRIP.fare)}
+              </>
             )}
           </button>
 
@@ -174,11 +217,7 @@ export const BrowserMonitor: React.FC<BrowserMonitorProps> = ({
                 <span className="bm-result-title">
                   {client.last.title === `${client.last.status} ${client.last.statusText}` ? '' : client.last.title}
                 </span>
-                {client.last.status !== 0 && (
-                  <span className="bm-result-ms">
-                    {client.last.latencyMs >= 1000 ? `${(client.last.latencyMs / 1000).toFixed(1)} s` : `${client.last.latencyMs} ms`}
-                  </span>
-                )}
+                {client.last.status !== 0 && <span className="bm-result-ms">{fmtMs(client.last.latencyMs)}</span>}
               </div>
               <p className="bm-result-detail">{client.last.detail}</p>
             </div>
@@ -197,10 +236,8 @@ export const BrowserMonitor: React.FC<BrowserMonitorProps> = ({
               <span className="bm-net-req">
                 <b>{r.method}</b> {r.path}
               </span>
-              <span className={`bm-net-status tone-${r.status === 0 ? 'err' : statusTone(r.status)}`}>
-                {r.status === null ? '…' : r.status === 0 ? 'failed' : r.status}
-              </span>
-              <span className="bm-net-ms">{r.ms === null ? '' : r.ms >= 1000 ? `${(r.ms / 1000).toFixed(1)} s` : `${r.ms} ms`}</span>
+              <span className={`bm-net-status tone-${r.status === 0 ? 'err' : statusTone(r.status)}`}>{r.status === null ? '…' : r.status === 0 ? 'failed' : r.status}</span>
+              <span className="bm-net-ms">{r.ms === null ? '' : fmtMs(r.ms)}</span>
             </div>
           ))}
         </div>

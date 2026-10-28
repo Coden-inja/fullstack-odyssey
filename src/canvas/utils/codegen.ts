@@ -3,7 +3,8 @@
 // and the lines disappear. Hidden infrastructure counts as wired.
 
 import { CanvasNode, CanvasWire, LevelDefinition } from '../types';
-import { BOB_SID, BOB_USER_ID, graph, instancesOf, reachableShards } from '../sim/engine';
+import { SID, USER_ID, graph, instancesOf, reachableShards } from '../sim/engine';
+import { PERSONA } from '../data/story';
 
 export interface GeneratedSource {
   filename: string;
@@ -68,10 +69,10 @@ function serverSource(node: CanvasNode, nodes: CanvasNode[], wires: CanvasWire[]
   }
 
   if (sessions === 'local') {
-    const held = ((node.data.localSessions as string[]) ?? []).includes('Bob');
+    const held = ((node.data.localSessions as string[]) ?? []).includes(PERSONA.name);
     L.push('');
     L.push(`// sessions live in THIS process's memory; other instances can't see them`);
-    L.push(`const sessions = new Map(${held ? `[['${BOB_SID}', '${BOB_USER_ID}']]` : ''});${held ? ' // Bob logged in here' : ' // empty'}`);
+    L.push(`const sessions = new Map(${held ? `[['${SID}', '${USER_ID}']]` : ''});${held ? ` // ${PERSONA.name} logged in here` : ' // empty'}`);
   } else if (sessions === 'redis') {
     L.push('');
     L.push('// sessions live in Redis, shared by every instance');
@@ -82,7 +83,7 @@ function serverSource(node: CanvasNode, nodes: CanvasNode[], wires: CanvasWire[]
     L.push(`const cache = createClient({ url: 'redis://cache:6379' });`);
     L.push('await cache.connect();');
   }
-  if (email === 'queue') L.push(`const emails = new Queue('send-ticket', { connection: { host: 'redis' } });`);
+  if (email === 'queue') L.push(`const eTickets = new Queue('send-e-ticket', { connection: { host: 'redis' } });`);
 
   L.push('');
   L.push('const app = express();');
@@ -92,12 +93,12 @@ function serverSource(node: CanvasNode, nodes: CanvasNode[], wires: CanvasWire[]
   const q = (sql: string, args: string) =>
     db === 'shards' ? `await shardFor(userId).query(\n    ${sql},\n    ${args}\n  )` : `await db.query(\n    ${sql},\n    ${args}\n  )`;
 
-  // GET /api/seats: only exists once reads matter
+  // GET /api/availability: only exists once reads matter
   if (cache !== 'none') {
     L.push('');
-    L.push(`app.get('/api/seats', async (req, res) => {`);
+    L.push(`app.get('/api/availability', async (req, res) => {`);
     if (cache === 'cache') {
-      L.push(`  const copy = await cache.get('seats:free');`);
+      L.push(`  const copy = await cache.get('avail:B2');`);
       L.push('  if (copy) return res.json({ free: Number(copy) }); // hit: ~1 ms, PostgreSQL not asked');
       L.push('');
     } else {
@@ -105,10 +106,10 @@ function serverSource(node: CanvasNode, nodes: CanvasNode[], wires: CanvasWire[]
     }
     L.push(
       db === 'shards'
-        ? `  const { rows } = await shards[0].query("SELECT count(*) FROM seats WHERE status = 'free'"); // seats aren't sharded`
-        : `  const { rows } = await db.query("SELECT count(*) FROM seats WHERE status = 'free'");`
+        ? `  const { rows } = await shards[0].query("SELECT count(*) FROM berths WHERE coach = 'B2' AND status = 'free'"); // berths aren't sharded`
+        : `  const { rows } = await db.query("SELECT count(*) FROM berths WHERE coach = 'B2' AND status = 'free'");`
     );
-    if (cache === 'cache') L.push(`  await cache.set('seats:free', rows[0].count, { EX: 5 }); // TTL: thrown away after 5 s`);
+    if (cache === 'cache') L.push(`  await cache.set('avail:B2', rows[0].count, { EX: 5 }); // TTL: thrown away after 5 s`);
     L.push('  res.json({ free: Number(rows[0].count) });');
     L.push('});');
   }
@@ -122,22 +123,22 @@ function serverSource(node: CanvasNode, nodes: CanvasNode[], wires: CanvasWire[]
     L.push('  const userId = await sessions.get(`session:${req.cookies.sid}`);');
     L.push(`  if (!userId) return res.status(401).json({ error: 'unknown session' });`);
   } else {
-    L.push(`  const userId = ${BOB_USER_ID}; // Bob (logins arrive in Level 4)`);
+    L.push(`  const userId = ${USER_ID}; // ${PERSONA.name} (logins arrive in Level 4)`);
   }
-  L.push('  const { seat } = req.body;');
+  L.push('  const { berth } = req.body;');
   if (db === 'none') {
     L.push(`  res.status(500).json({ error: 'nowhere to save the booking' });`);
   } else {
-    L.push(`  const { rows } = ${q(`'INSERT INTO bookings (user_id, seat) VALUES ($1, $2) RETURNING id'`, '[userId, seat]')};`);
+    L.push(`  const { rows } = ${q(`'INSERT INTO bookings (user_id, berth) VALUES ($1, $2) RETURNING id'`, '[userId, berth]')};`);
     if (email === 'sync') {
       L.push('');
-      L.push('  // Bob waits for all of this before he sees anything');
-      L.push('  const pdf = await renderTicketPdf(userId, seat); // ~1.8 s');
-      L.push('  await emailProvider.send({ to: userId, attachment: pdf }); // ~1.4 s');
+      L.push(`  // ${PERSONA.name} waits for all of this before he sees anything`);
+      L.push('  const pdf = await makeETicketPdf(userId, berth); // ~1.8 s');
+      L.push('  await sms.send(userId, pdf); await email.send(userId, pdf); // ~1.4 s');
     } else if (email === 'queue') {
-      L.push(`  await emails.add('send-ticket', { userId, seat }); // ~2 ms; a worker does the rest`);
+      L.push(`  await eTickets.add('send-e-ticket', { userId, berth }); // ~2 ms; a worker does the rest`);
     }
-    L.push('  res.status(200).json({ bookingId: rows[0].id, seat });');
+    L.push('  res.status(200).json({ pnr: rows[0].id, berth });');
   }
   L.push('});');
   L.push('');
@@ -160,13 +161,13 @@ export function generateSource(
 
     case 'browser': {
       const L = [
-        '// what the Reserve button runs in Bob’s browser',
-        `const res = await fetch('/api/orders', {`,
+        `// what the Book button runs in ${PERSONA.name}’s browser`,
+        `const res = await fetch('/api/bookings', {`,
         `  method: 'POST',`,
         `  headers: { 'Content-Type': 'application/json' },`,
-        `  body: JSON.stringify({ seat: '14C' }),`
+        `  body: JSON.stringify({ berth: '12' }),`
       ];
-      if (level.levelNumber >= 4) L.push(`  credentials: 'include' // sends the cookie sid=${BOB_SID} along`);
+      if (level.levelNumber >= 4) L.push(`  credentials: 'include' // sends the cookie sid=${SID} along`);
       L.push('});', '', '// the browser waits here until the response arrives', 'console.log(res.status); // 200, 500, …');
       return { filename: 'reserve.js', language: 'js', code: L.join('\n') };
     }
@@ -202,9 +203,9 @@ export function generateSource(
       const L = ['-- PostgreSQL, listening on port 5432'];
       if (level.mechanics.connectionLimit) L.push('-- postgresql.conf: max_connections = 100  (one OS process each)');
       if (node.data.shard) L.push(`-- this shard holds rows where user_id % number_of_shards points at ${node.title}`);
-      L.push('', 'CREATE TABLE bookings (', '  id      bigserial PRIMARY KEY,', '  user_id bigint NOT NULL,', '  seat    text   NOT NULL', ');');
+      L.push('', 'CREATE TABLE bookings (', '  id      bigserial PRIMARY KEY,', '  user_id bigint NOT NULL,', '  berth   text   NOT NULL', ');');
       if (level.mechanics.sharding) L.push('', '-- a sorted B-tree on user_id; fast only while it fits in RAM', 'CREATE INDEX bookings_user_id ON bookings (user_id);');
-      if (level.mechanics.readHeavy || level.levelNumber >= 6) L.push('', "SELECT count(*) FROM seats WHERE status = 'free';  -- walks every seat row");
+      if (level.mechanics.readHeavy || level.levelNumber >= 6) L.push('', "SELECT count(*) FROM berths WHERE coach = 'B2' AND status = 'free';  -- walks every berth row");
       return { filename: 'schema.sql', language: 'sql', code: L.join('\n') };
     }
 
@@ -215,8 +216,8 @@ export function generateSource(
             language: 'conf',
             code: [
               '# Redis used as a cache for one expensive answer',
-              'GET seats:free             # hit → "1204", miss → (nil)',
-              'SET seats:free 1204 EX 5   # keep the copy for 5 s (TTL)'
+              'GET avail:B2               # hit → "AVL 12", miss → (nil)',
+              'SET avail:B2 "AVL 12" EX 5 # keep the copy for 5 s (TTL)'
             ].join('\n')
           }
         : {
@@ -224,8 +225,8 @@ export function generateSource(
             language: 'conf',
             code: [
               '# Redis: an in-memory key-value store, port 6379',
-              `SET session:${BOB_SID} "${BOB_USER_ID}"   # written by the server Bob logged in on`,
-              `GET session:${BOB_SID}          # any instance can read it back`
+              `SET session:${SID} "${USER_ID}"   # written by the server ${PERSONA.name} logged in on`,
+              `GET session:${SID}          # any instance can read it back`
             ].join('\n')
           };
 
@@ -253,9 +254,9 @@ export function generateSource(
           '// worker.js: a separate process that drains the job queue',
           `import { Worker } from 'bullmq';`,
           '',
-          `new Worker('send-ticket', async (job) => {`,
-          '  const pdf = await renderTicketPdf(job.data.userId, job.data.seat); // 1.8 s, nobody waiting',
-          '  await emailProvider.send({ to: job.data.userId, attachment: pdf }); // 1.4 s',
+          `new Worker('send-e-ticket', async (job) => {`,
+          '  const pdf = await makeETicketPdf(job.data.userId, job.data.berth); // 1.8 s, nobody waiting',
+          '  await sms.send(job.data.userId, pdf); await email.send(job.data.userId, pdf); // 1.4 s',
           `}, { connection: { host: 'redis' } });`
         ].join('\n')
       };
@@ -264,7 +265,7 @@ export function generateSource(
 
 // One sentence per node type, in the words of the level that introduced it
 export const NODE_BLURB: Record<CanvasNode['type'], string> = {
-  browser: 'Bob’s browser: the client. It starts every conversation and waits for the response.',
+  browser: `${PERSONA.name}’s browser: the client. It starts every conversation and waits for the response.`,
   server: 'A program listening on port 3000. Its code below changes as you wire it to things.',
   database: 'PostgreSQL: keeps rows on disk so they survive restarts. Only servers talk to it.',
   balancer: 'Accepts every request and forwards each one to an instance behind it.',

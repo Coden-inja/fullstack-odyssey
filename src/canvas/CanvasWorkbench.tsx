@@ -24,18 +24,21 @@ import {
   EyeOff,
   ChevronDown,
   ExternalLink,
-  Check
+  Check,
+  Clock
 } from 'lucide-react';
 import { CanvasNode, CanvasWire, ClientAction, LevelGoal, NodeType, SolutionStep, WirePacket } from './types';
 import { CANVAS_CURRICULUM } from './data/curriculum';
 import { CONCEPTS, conceptById, conceptsUpTo } from './data/concepts';
 import { makeNode } from './data/nodeFactory';
 import { Hop, SimResult, deriveMetrics, simulateRequest } from './sim/engine';
+import { FlowState, TIME_SCALE, TIMEOUT_S, crowdTotals, emptyFlow, stepFlow } from './sim/flow';
+import { BERTHS_TAKEN, PERSONA, TRIP, inr } from './data/story';
 import { validateSystemWire } from './utils/wireValidation';
 import { generateSource } from './utils/codegen';
 import { lintCurriculum } from './utils/conceptLint';
 import { NodeRenderer, QueueState } from './components/NodeRenderer';
-import { BrowserMonitor, ClientState, initialClient } from './components/BrowserMonitor';
+import { AvatarState, BrowserMonitor, ClientState, CrowdView, initialClient } from './components/BrowserMonitor';
 import { WireRenderer } from './components/WireRenderer';
 import { NodeInspector } from './components/NodeInspector';
 import { QuizModal } from './components/QuizModal';
@@ -66,7 +69,7 @@ const PACE: Record<Speed, { travel: number; minHold: number }> = {
 interface Run {
   id: number;
   action: ClientAction;
-  seat: string;
+  berth: string;
   rps: number;
   hops: Hop[];
   idx: number; // hop on screen now
@@ -156,7 +159,8 @@ export const CanvasWorkbench: React.FC = () => {
   const [flashGoals, setFlashGoals] = useState<number[]>([]);
   const [openConcept, setOpenConcept] = useState<string | null>(null);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
-  const [tick, setTick] = useState(0);
+  const [flow, setFlow] = useState<FlowState>(emptyFlow);
+  const [crowd, setCrowd] = useState<CrowdView>({ avatars: [], arriving: 0, waiting: 0, booked: 0, gaveUp: 0 });
   const [fitNonce, setFitNonce] = useState(0);
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -193,6 +197,9 @@ export const CanvasWorkbench: React.FC = () => {
     setOpenConcept(null);
     wasComplete.current = false;
     prevGoals.current = [];
+    flowRef.current = emptyFlow();
+    avatarsRef.current = [];
+    setFlow(flowRef.current);
     setFitNonce((n) => n + 1);
   }, []);
 
@@ -209,9 +216,55 @@ export const CanvasWorkbench: React.FC = () => {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // slow clock for the small CPU wobble on cards
+  // ── the crowd: a fluid model stepped every 100 ms (×TIME_SCALE simulated) ──
+  const flowRef = useRef<FlowState>(emptyFlow());
+  const avatarsRef = useRef<{ s: AvatarState; until: number; pending?: AvatarState }[]>([]);
+  const live = useRef({ nodes, wires, rps, mech, rr, warmCaches });
+  live.current = { nodes, wires, rps, mech, rr, warmCaches };
+
   useEffect(() => {
-    const t = setInterval(() => setTick((x) => x + 1), 1000);
+    const TICK_S = 0.1;
+    const t = setInterval(() => {
+      const L = live.current;
+      const next = stepFlow(flowRef.current, L.nodes, L.wires, L.rps, L.mech, TICK_S * TIME_SCALE);
+      flowRef.current = next;
+      setFlow(next);
+
+      // Faces: each one is a share of the traffic, living through what a new arrival would get right now
+      const totals = crowdTotals(next, L.nodes, L.wires, L.rps);
+      const probe = simulateRequest({ nodes: L.nodes, wires: L.wires, flow: next, mechanics: L.mech, action: 'buy', berth: '1', rrCursor: L.rr, warmCaches: L.warmCaches });
+      const hardFail = probe.status === 0 || probe.status === 500 || probe.status === 502;
+      const want = L.rps <= 1 ? 0 : Math.min(36, Math.ceil(L.rps / 15));
+      const av = avatarsRef.current;
+      while (av.length < want) av.push({ s: 'idle', until: next.t + Math.random() * 2 });
+      av.length = want;
+      for (const a of av) {
+        if (next.t < a.until) continue;
+        if (a.s === 'idle') {
+          if (hardFail) {
+            a.s = 'error';
+            a.until = next.t + 3;
+          } else {
+            a.s = 'waiting';
+            a.pending = totals.wait >= TIMEOUT_S - 0.05 ? 'gaveup' : 'booked';
+            a.until = next.t + Math.max(0.6, Math.min(totals.wait, TIMEOUT_S));
+          }
+        } else if (a.s === 'waiting') {
+          a.s = a.pending ?? 'booked';
+          a.until = next.t + 3;
+        } else {
+          a.s = 'idle';
+          a.until = next.t + 0.5 + Math.random() * 2.5;
+        }
+      }
+      setCrowd({
+        avatars: av.map((a) => a.s),
+        arriving: totals.arriving,
+        waiting: totals.waiting,
+        booked: hardFail ? 0 : totals.booked,
+        gaveUp: hardFail ? L.rps : totals.gaveUp
+      });
+    }, TICK_S * 1000);
     return () => clearInterval(t);
   }, []);
 
@@ -270,13 +323,13 @@ export const CanvasWorkbench: React.FC = () => {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  const metrics = useMemo(() => deriveMetrics(nodes, wires, rps, mech, rr, tick), [nodes, wires, rps, mech, rr, tick]);
+  const metrics = useMemo(() => deriveMetrics(nodes, wires, flow, mech, rr), [nodes, wires, flow, mech, rr]);
 
   // ── one request, played strictly in order ───────────────────────────────
   const startRequest = (action: ClientAction) => {
     if (run) return;
     setHintMode((m) => (m === 'hint' ? null : m));
-    const result = simulateRequest({ nodes, wires, rps, mechanics: mech, action, seat: client.seat, rrCursor: rr, warmCaches });
+    const result = simulateRequest({ nodes, wires, flow: flowRef.current, mechanics: mech, action, berth: client.berth, rrCursor: rr, warmCaches });
     const t0 = performance.now();
     const netId = ++netCounter;
     setRr(result.nextRrCursor);
@@ -285,11 +338,11 @@ export const CanvasWorkbench: React.FC = () => {
       sending: { action, startedAt: t0 },
       network: [
         ...c.network,
-        { id: netId, method: action === 'buy' ? 'POST' : 'GET', path: action === 'buy' ? '/api/orders' : '/api/seats', status: null, ms: null }
+        { id: netId, method: action === 'buy' ? 'POST' : 'GET', path: action === 'buy' ? '/api/bookings' : '/api/availability', status: null, ms: null }
       ].slice(-6)
     }));
     setNow(t0);
-    setRun({ id: ++runCounter, action, seat: client.seat, rps, hops: result.hops, idx: 0, segStart: t0, waiting: false, startedAt: t0, result, netId });
+    setRun({ id: ++runCounter, action, berth: client.berth, rps, hops: result.hops, idx: 0, segStart: t0, waiting: false, startedAt: t0, result, netId });
   };
 
   useEffect(() => {
@@ -314,10 +367,10 @@ export const CanvasWorkbench: React.FC = () => {
       sending: null,
       last: { action: r.action, status: res.status, statusText: res.statusText, title: res.title, detail: res.detail, latencyMs: res.latencyMs },
       network: c.network.map((n) => (n.id === r.netId ? { ...n, status: res.status, ms: res.status === 0 ? null : res.latencyMs } : n)),
-      booked: bookedOk ? [...c.booked, r.seat] : c.booked,
-      freeSeats: bookedOk ? c.freeSeats - 1 : c.freeSeats,
-      seat: bookedOk ? nextFreeSeat([...c.booked, r.seat]) : c.seat,
-      emails: res.email === 'sync' ? [...c.emails, { id: r.id, text: `Your ticket for seat ${r.seat} (PDF attached)` }] : c.emails
+      booked: bookedOk ? [...c.booked, r.berth] : c.booked,
+      available: bookedOk ? Math.max(0, c.available - 1) : c.available,
+      berth: bookedOk ? nextFreeBerth([...c.booked, r.berth]) : c.berth,
+      messages: res.email === 'sync' ? [...c.messages, { id: r.id, text: eTicketSms(r) }] : c.messages
     }));
     if (res.warmedCache) {
       const id = res.warmedCache;
@@ -329,14 +382,19 @@ export const CanvasWorkbench: React.FC = () => {
       later(() => setQueue((q) => ({ ...q, working: true })), 900);
       later(() => {
         setQueue((q) => ({ depth: Math.max(0, q.depth - 1), sent: q.sent + 1, working: false }));
-        setClient((c) => ({ ...c, emails: [...c.emails, { id: r.id, text: `Your ticket for seat ${r.seat} (sent by the worker)` }] }));
+        setClient((c) => ({ ...c, messages: [...c.messages, { id: r.id, text: `${eTicketSms(r)} (sent by the worker)` }] }));
       }, 900 + 3200);
     }
   };
 
   // auto-solve never sits waiting for a click that only a human would make
   const pace = PACE[speed === 'step' && hintMode === 'autosolve' ? 'slow' : speed];
-  const holdFor = (h: Hop) => Math.max(h.holdMs ?? 0, pace.minHold);
+  const holdFor = (h: Hop) => {
+    const work = Math.max(h.holdMs ?? 0, pace.minHold);
+    if (!h.queue) return work;
+    const waitS = Math.min(h.queue.ahead / h.queue.rate, TIMEOUT_S);
+    return Math.max(pace.minHold, (waitS * 1000) / TIME_SCALE) + (h.queue.timesOut ? 0 : work);
+  };
 
   useEffect(() => {
     if (!run) return;
@@ -393,8 +451,16 @@ export const CanvasWorkbench: React.FC = () => {
         isReturn: hop.reverse,
         isError: hop.isError
       });
-    } else if (wire && hop.work) {
-      activity = { nodeId: hop.reverse ? wire.sourceNodeId : wire.targetNodeId, text: hop.work };
+    } else if (wire) {
+      const dest = hop.reverse ? wire.sourceNodeId : wire.targetNodeId;
+      const heldS = ((elapsed - pace.travel) / 1000) * TIME_SCALE; // simulated seconds at this node
+      let text = hop.work;
+      if (hop.queue) {
+        const waitS = Math.min(hop.queue.ahead / hop.queue.rate, TIMEOUT_S);
+        if (heldS < waitS) text = `${PERSONA_NAME} is #${inr(Math.max(1, Math.ceil(hop.queue.ahead - hop.queue.rate * heldS)))} in line · ${heldS.toFixed(1)} s`;
+        else text = hop.queue.timesOut ? `gave up after ${TIMEOUT_S} s in line` : hop.work ?? 'reading the request';
+      }
+      if (text) activity = { nodeId: dest, text };
     }
   }
 
@@ -656,6 +722,7 @@ export const CanvasWorkbench: React.FC = () => {
   const codeSource = codeNode ? generateSource(codeNode, nodes, wires, level) : null;
   const sliderMax = Math.max(600, Math.ceil((level.simulatedTrafficRps * 1.5) / 100) * 100);
   const traceRun = run ?? lastRun;
+  const dotScale = niceScale(Math.max(0, ...Object.values(flow.link)) / 8);
   const outcomeLine = !run && lastRun ? `→ Bob sees: ${lastRun.result.status === 0 ? 'no connection' : `${lastRun.result.status} ${lastRun.result.statusText}`}` : undefined;
   const allSoFar = conceptsUpTo(level.levelNumber);
   const fact = level.facts[0];
@@ -669,7 +736,7 @@ export const CanvasWorkbench: React.FC = () => {
       onMouseLeave={handleMouseUp}
     >
       <div className="wb-banner">
-        Build a ticket site’s backend, watch it break, then fix it. Grounded in <em>allahabadi.dev</em> &amp; <em>backendengineer.in</em>
+        Build the backend of a Tatkal booking site, watch it break at 10:00 AM, then fix it. Grounded in <em>allahabadi.dev</em> &amp; <em>backendengineer.in</em>
       </div>
 
       <header className="wb-nav">
@@ -878,6 +945,8 @@ export const CanvasWorkbench: React.FC = () => {
               portPositions={portPositions}
               justConnectedId={justConnected}
               activeWireId={activeWireId}
+              flows={level.trafficControl ? flow.link : undefined}
+              dotScale={dotScale}
             />
             {nodes.map((node) => (
               <div
@@ -895,11 +964,12 @@ export const CanvasWorkbench: React.FC = () => {
                     levelNumber={level.levelNumber}
                     mechanics={mech}
                     client={client}
+                    crowd={level.trafficControl ? crowd : undefined}
                     now={now}
                     busyLabel={speed === 'step' && hintMode !== 'autosolve' && run ? `Step ${activeIdx + 1} of ${run.hops.length}: see the trace` : undefined}
                     isPendingWireActive={!!pendingWire}
                     onAction={startRequest}
-                    onSelectSeat={(seat) => setClient((c) => ({ ...c, seat }))}
+                    onSelectBerth={(berth) => setClient((c) => ({ ...c, berth }))}
                     onStartWire={handleStartWire}
                     onEndWire={handleEndWire}
                     onOpenCode={setCodeNodeId}
@@ -925,6 +995,14 @@ export const CanvasWorkbench: React.FC = () => {
           </div>
 
           <div className="dock" onMouseDown={(e) => e.stopPropagation()}>
+            {level.trafficControl && (
+              <div className="dock-group" title={`Simulated time runs ${TIME_SCALE}× faster than real time. Each moving dot on a wire is about ${inr(dotScale)} requests per second.`}>
+                <Clock size={13} />
+                <span className="dock-value">{clockText(flow.t)}</span>
+                <span className="dock-label">×{TIME_SCALE}</span>
+                <span className="dock-dot" /> <span className="dock-legend">= {inr(dotScale)} req/s</span>
+              </div>
+            )}
             <div className="dock-group" title="How fast a request plays out on the wires">
               <span className="dock-label">Speed</span>
               {(['step', 'slow', 'normal'] as Speed[]).map((sp) => (
@@ -1069,5 +1147,23 @@ export const CanvasWorkbench: React.FC = () => {
   );
 };
 
-const ALL_SEATS = ['14A', '14C', '14D', '14F', '14G', '14H', '15B', '15C', '15D', '15E', '15H'];
-const nextFreeSeat = (booked: string[]) => ALL_SEATS.find((s) => !booked.includes(s)) ?? '15H';
+const PERSONA_NAME = PERSONA.name;
+const nextFreeBerth = (booked: string[]) =>
+  Array.from({ length: 16 }, (_, i) => String(i + 1)).find((b) => !BERTHS_TAKEN.has(b) && !booked.includes(b)) ?? '16';
+const eTicketSms = (r: { id: number; berth: string }) => `SMS: PNR 84${String(2000 + r.id)}61 · ${TRIP.coach}/${r.berth} confirmed`;
+
+// 1, 2, 5, 10, 20, 50… so the dot legend is a readable number
+const niceScale = (x: number) => {
+  if (x <= 1) return 1;
+  const p = 10 ** Math.floor(Math.log10(x));
+  return [1, 2, 5, 10].map((m) => m * p).find((v) => v >= x) ?? 10 * p;
+};
+
+// simulated time of day: every level opens just before Tatkal at 10:00 AM
+const clockText = (t: number) => {
+  const total = 9 * 3600 + 59 * 60 + 40 + Math.floor(t);
+  const hh = Math.floor(total / 3600) % 24;
+  const mm = Math.floor(total / 60) % 60;
+  const ss = total % 60;
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}`;
+};

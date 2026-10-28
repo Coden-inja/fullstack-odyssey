@@ -2,6 +2,7 @@ import React from 'react';
 import { Shield, Server, Zap, Database, ListTodo, Cable, Code2, Cog } from 'lucide-react';
 import { CanvasNode, LevelMechanics } from '../types';
 import { NodeMetrics } from '../sim/engine';
+import { inr, inrWords } from '../data/story';
 
 export interface QueueState {
   depth: number;
@@ -39,8 +40,8 @@ const Row: React.FC<{ label: string; value: React.ReactNode; tone?: 'ok' | 'warn
   </div>
 );
 
-const fmt = (n: number) => n.toLocaleString('en-US');
-const fmtRows = (n: number) => (n >= 1_000_000 ? `${Math.round(n / 1_000_000)} million` : fmt(n));
+const fmt = inr;
+const fmtRows = inrWords;
 
 export const NodeRenderer: React.FC<NodeRendererProps> = ({
   node,
@@ -118,7 +119,7 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
       }
       case 'redis':
         return data.role === 'cache' ? (
-          <Row label="seats:free" value={cacheWarm ? '1204 · TTL 5 s' : 'empty'} tone={cacheWarm ? 'ok' : undefined} />
+          <Row label="avail:B2" value={cacheWarm ? 'AVL 12 · TTL 5 s' : 'empty'} tone={cacheWarm ? 'ok' : undefined} />
         ) : (
           <Row
             label="stored"
@@ -195,7 +196,18 @@ export const NodeRenderer: React.FC<NodeRendererProps> = ({
           <Code2 size={12} />
         </button>
       </div>
-      <div className="nc-body">{body}</div>
+      <div className="nc-body">
+        {body}
+        {metrics.waitS !== undefined && levelNumber >= 2 && (metrics.waiting ?? 0) > 0 && (
+          <div className="nc-line" title="Requests waiting in front of this node. Full bar = 10 s of work: anyone further back times out.">
+            <div className="nc-line-bar">
+              <span style={{ width: `${Math.min(100, (metrics.waitS / 10) * 100)}%` }} />
+            </div>
+            <Row label="in line" value={`${fmt(metrics.waiting ?? 0)} · ${Math.round(metrics.waitS)} s`} tone={metrics.waitS >= 9.9 ? 'err' : 'warn'} />
+            {(metrics.gaveUp ?? 0) > 0 && <Row label="giving up" value={`${fmt(metrics.gaveUp ?? 0)}/s`} tone="err" />}
+          </div>
+        )}
+      </div>
 
       {node.ports.outputs.map((p) => (
         <div

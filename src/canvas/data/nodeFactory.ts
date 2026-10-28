@@ -1,4 +1,5 @@
 import { CanvasNode, CanvasWire, NodeType } from '../types';
+import { PERSONA } from './story';
 
 // One input dot on the left and at most one output dot on the right per card.
 // Several wires may share a dot; nodes that never start a conversation have no output.
@@ -33,4 +34,4 @@ export const makeWire = (from: string, to: string): CanvasWire => ({
   status: 'active'
 });
 
-export const browserNode = () => makeNode('node-browser', 'browser', 'Bob’s browser', 0, 40);
+export const browserNode = () => makeNode('node-browser', 'browser', `${PERSONA.name}’s browser`, 0, 40);

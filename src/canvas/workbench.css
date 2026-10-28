@@ -1770,3 +1770,155 @@
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* ── the crowd: faces above the monitor, dots on the wires, line on the cards ── */
+.crowd {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 9px 11px 10px;
+  border-radius: 12px;
+  background: var(--c-bg-card);
+  border: 1px solid var(--c-border);
+  box-shadow: var(--c-shadow-card);
+  cursor: default;
+}
+.crowd-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font: 700 10.5px/1 var(--c-font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--c-text-tertiary);
+}
+.crowd-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+.crowd-legend .av {
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+}
+.crowd-faces {
+  display: grid;
+  grid-template-columns: repeat(18, 1fr);
+  gap: 4px;
+  margin: 9px 0 8px;
+  min-height: 34px;
+}
+.crowd-empty {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--c-text-tertiary);
+  align-self: center;
+}
+.av {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50% 50% 45% 45%;
+  background: var(--c-border-strong);
+  transition: background 0.3s;
+}
+.av-waiting {
+  background: var(--c-honey);
+  animation: av-wait 1s ease-in-out infinite;
+}
+.av-booked {
+  background: var(--c-mint);
+}
+.av-gaveup,
+.av-error {
+  background: var(--c-coral);
+}
+@keyframes av-wait {
+  50% {
+    opacity: 0.45;
+  }
+}
+.crowd-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font: 500 11px/1.2 var(--c-font-mono);
+  color: var(--c-text-secondary);
+}
+.crowd-stats b {
+  font-weight: 700;
+}
+.crowd-dot {
+  fill: var(--c-sky);
+  opacity: 0.75;
+  pointer-events: none;
+}
+.wb .dock-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--c-sky);
+  margin-left: 4px;
+}
+.wb .dock-legend {
+  font: 500 11px/1 var(--c-font-mono);
+  color: var(--c-text-secondary);
+}
+.nc-line {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--c-border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.nc-line-bar {
+  height: 6px;
+  border-radius: 6px;
+  background: var(--c-border);
+  overflow: hidden;
+}
+.nc-line-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--c-honey), var(--c-coral));
+  transition: width 0.15s linear;
+}
+.bm-brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bm-seat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  height: 32px;
+}
+.bm-berth-n {
+  font: 700 11px/1 var(--c-font-sans);
+}
+.bm-berth-t {
+  font: 600 8.5px/1 var(--c-font-mono);
+  opacity: 0.7;
+}
+
+/* crowd readability: four colours you can tell apart at a glance */
+.av { background: #d6d3d1; }
+.av-waiting { background: #f59e0b; }
+.av-booked { background: #16a34a; }
+.av-gaveup, .av-error { background: #dc2626; }
+.wb[data-theme='dark'] .av { background: #57534e; }
+.crowd-head { white-space: nowrap; gap: 8px; }
+.crowd-legend { font-size: 10.5px; }
+.crowd-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 10px;
+}
+.nc-value { white-space: nowrap; }

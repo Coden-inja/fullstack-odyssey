@@ -2,6 +2,8 @@
 // introduces it has been reached — utils/conceptLint.ts enforces this.
 // Definitions themselves may only lean on concepts from the same or earlier levels.
 
+import { PERSONA } from './story';
+
 export interface Concept {
   id: string;
   term: string;
@@ -17,7 +19,7 @@ export const CONCEPTS: Concept[] = [
     term: 'client',
     aliases: [],
     level: 1,
-    definition: 'The program that starts the conversation. Here it is Bob’s browser.'
+    definition: `The program that starts the conversation. Here it is ${PERSONA.name}’s browser.`
   },
   {
     id: 'server',
@@ -186,14 +188,14 @@ export const CONCEPTS: Concept[] = [
     term: 'session',
     aliases: ['sessions'],
     level: 4,
-    definition: 'What a server remembers about you between requests, e.g. “session 8f3a belongs to Bob”.'
+    definition: `What a server remembers about you between requests, e.g. “session 8f3a belongs to ${PERSONA.name}”.`
   },
   {
     id: 'cookie',
     term: 'cookie',
     aliases: ['sid'],
     level: 4,
-    definition: 'A small value the browser stores and sends back with every request. Here: Bob’s session id, sid=8f3a.'
+    definition: `A small value the browser stores and sends back with every request. Here: ${PERSONA.name}’s session id, sid=8f3a.`
   },
   {
     id: '401',
@@ -250,7 +252,7 @@ export const CONCEPTS: Concept[] = [
     term: 'read-heavy',
     aliases: [],
     level: 6,
-    definition: 'Far more reads than writes. The free-seat count is read thousands of times for every booking.'
+    definition: 'Far more reads than writes. Berth availability is checked thousands of times for every booking.'
   },
   {
     id: 'cache',
