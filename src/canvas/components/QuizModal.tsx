@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { QuizQuestion } from '../types';
 import {
   HelpCircle,
@@ -25,10 +25,16 @@ export const QuizModal: React.FC<QuizModalProps> = ({
   onClose,
   onPassedQuiz
 }) => {
-  if (!isOpen) return null;
-
+  // Hooks must run before the early return, or closing the modal crashes React
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+
+  useEffect(() => {
+    setSelectedOption(null);
+    setIsSubmitted(false);
+  }, [quiz, isOpen]);
+
+  if (!isOpen) return null;
 
   const isCorrect = selectedOption === quiz.correctIndex;
 
@@ -48,9 +54,9 @@ export const QuizModal: React.FC<QuizModalProps> = ({
         {/* Eyebrow Pill directly inspired by Frontend Master / Image 2 */}
         <div className="quiz-modal-eyebrow">
           <span className="eyebrow-pill">
-            <span className="eyebrow-dot" /> PATTERN CHECKPOINT &middot; {actTitle.toUpperCase()}
+            <span className="eyebrow-dot" /> CHECK YOURSELF &middot; {actTitle.toUpperCase()}
           </span>
-          <button className="quiz-close-x" onClick={onClose} title="Close Checkpoint">
+          <button className="quiz-close-x" onClick={onClose} title="Close">
             &times;
           </button>
         </div>
@@ -92,12 +98,12 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               {isCorrect ? (
                 <>
                   <CheckCircle2 size={18} className="status-icon green" />
-                  <span className="status-heading">Architectural Analysis Verified</span>
+                  <span className="status-heading">Right</span>
                 </>
               ) : (
                 <>
                   <XCircle size={18} className="status-icon red" />
-                  <span className="status-heading">Trade-Off Analysis Incorrect</span>
+                  <span className="status-heading">Not quite. Here’s why:</span>
                 </>
               )}
             </div>
@@ -106,7 +112,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
 
             {/* "IN ONE LINE" Style Grounded Citation Box */}
             <div className="quiz-citation-tldr">
-              <span className="citation-eyebrow">GROUNDED SOURCE CITATION</span>
+              <span className="citation-eyebrow">SOURCE</span>
               <div className="citation-title-row">
                 <span className="citation-brand">{quiz.referenceSource.title}</span>
                 <span className="citation-divider">&middot;</span>
@@ -124,7 +130,7 @@ export const QuizModal: React.FC<QuizModalProps> = ({
               disabled={selectedOption === null}
               onClick={handleSubmit}
             >
-              Verify Architectural Decision
+              Check my answer
             </button>
           ) : isCorrect ? (
             <button
@@ -134,13 +140,13 @@ export const QuizModal: React.FC<QuizModalProps> = ({
                 onClose();
               }}
             >
-              <span>Unlock Next Act</span>
+              <span>Done</span>
               <ArrowRight size={16} />
             </button>
           ) : (
             <button className="quiz-retry-action-btn" onClick={handleRetry}>
               <RotateCcw size={14} />
-              <span>Retry Question</span>
+              <span>Try again</span>
             </button>
           )}
         </div>

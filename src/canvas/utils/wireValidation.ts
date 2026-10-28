@@ -7,89 +7,78 @@ export interface WireValidationResult {
   protocol?: string;
 }
 
+// Which wires make sense, explained only with words the player has already met
+// at the level where each node type first appears.
 export function validateSystemWire(
   sourceNode: CanvasNode,
-  sourcePortId: string,
+  _sourcePortId: string,
   targetNode: CanvasNode,
-  targetPortId: string
+  _targetPortId: string
 ): WireValidationResult {
-  // 1. Self-referencing loop
+  const s = sourceNode.type;
+  const t = targetNode.type;
+
   if (sourceNode.id === targetNode.id) {
+    return { valid: false, warning: 'A wire needs two different programs at its ends.' };
+  }
+
+  if (t === 'browser') {
     return {
       valid: false,
-      warning: 'Self-referencing Loop: A system process cannot establish a network socket back to itself.',
-      rfcCitation: 'RFC 9110 § 3.2'
+      warning:
+        'Nothing calls Bob’s browser. The browser always starts the conversation; replies come back along the wire it opened.'
     };
   }
 
-  // 2. Client Browser -> Database directly
-  if (sourceNode.type === 'browser' && targetNode.type === 'database') {
+  if (s === 'browser' && t === 'database') {
     return {
       valid: false,
-      warning: 'Security Boundary Blocked: Public ingress to PostgreSQL Port 5432 is forbidden. Direct client browser-to-DB connections violate 3-tier architecture boundaries.',
-      rfcCitation: 'RFC 9110 & OWASP Top 10 (A01: Broken Access Control)'
+      warning:
+        'Bob’s browser can’t talk to PostgreSQL directly: the database only accepts connections from your own servers. Opening it to the internet would let anyone read every row.'
     };
   }
 
-  // 3. Database -> Client Browser (backwards)
-  if (sourceNode.type === 'database' && targetNode.type === 'browser') {
+  if (s === 'browser' && t !== 'server' && t !== 'balancer') {
+    return { valid: false, warning: `Bob’s browser speaks HTTP to a server. It can’t talk to ${targetNode.title} directly.` };
+  }
+
+  if (s === 'balancer' && t !== 'server') {
+    return { valid: false, warning: 'A load balancer forwards requests to server instances only.' };
+  }
+
+  if (s === 'server' && (t === 'server' || t === 'balancer')) {
     return {
       valid: false,
-      warning: 'Invalid Direction: Databases cannot initiate unsolicited socket connections to external client browsers.',
-      rfcCitation: 'RFC 9110 (Client-Server Request/Response Paradigm)'
+      warning: 'Servers here don’t forward requests to each other. Put a load balancer in front of them instead.'
     };
   }
 
-  // 4. Balancer -> Balancer (Infinite loop hazard)
-  if (sourceNode.type === 'balancer' && targetNode.type === 'balancer') {
-    return {
-      valid: false,
-      warning: 'Proxy Loop Hazard: Cascading load balancers without health routing can trigger infinite HTTP forwarding loops.',
-      rfcCitation: 'RFC 9110 § 7.6.2 (Max-Forwards & Loop Detection)'
-    };
+  if (s === 'pool' && t !== 'database') {
+    return { valid: false, warning: 'PgBouncer only hands out connections to PostgreSQL.' };
   }
 
-  // 5. Database -> Balancer
-  if (sourceNode.type === 'database' && targetNode.type === 'balancer') {
-    return {
-      valid: false,
-      warning: 'Protocol Mismatch: Database wire protocol (PostgreSQL frontend/backend) cannot terminate directly at an HTTP reverse proxy.',
-      rfcCitation: 'PostgreSQL Section 53: Frontend/Backend Protocol'
-    };
+  if (t === 'pool' && s !== 'server') {
+    return { valid: false, warning: 'Only your servers borrow connections from PgBouncer.' };
   }
 
-  // 6. Redis -> Client Browser
-  if (sourceNode.type === 'redis' && targetNode.type === 'browser') {
-    return {
-      valid: false,
-      warning: 'Security Policy Blocked: Redis does not implement browser TLS authentication or CORS. Exposing Redis Port 6379 to browsers permits unauthorized memory exfiltration.',
-      rfcCitation: 'Redis Security Documentation (Protected Mode & Trusted Environments)'
-    };
+  if (t === 'queue' && s !== 'server') {
+    return { valid: false, warning: 'Only your servers add jobs to the queue.' };
   }
 
-  // 7. Queue -> Database directly without worker
-  if (sourceNode.type === 'queue' && targetNode.type === 'database') {
-    return {
-      valid: false,
-      warning: 'Missing Worker Layer: Asynchronous message queues do not execute SQL queries directly. A worker process must consume messages from the queue and execute the write.',
-      rfcCitation: 'Enterprise Integration Patterns: Consumer Worker Pattern'
-    };
+  if (t === 'redis' && s !== 'server') {
+    return { valid: false, warning: 'Only your servers read and write Redis.' };
   }
 
-  // Determine established protocol for valid connection
-  let protocol = 'TCP Stream Socket';
-  if (sourceNode.type === 'browser' || sourceNode.type === 'balancer') {
-    protocol = 'HTTP/1.1 (TLS 1.3)';
-  } else if (targetNode.type === 'database') {
-    protocol = 'PostgreSQL Wire Protocol (Port 5432)';
-  } else if (targetNode.type === 'redis') {
-    protocol = 'Redis RESP Protocol (Port 6379)';
-  } else if (targetNode.type === 'queue') {
-    protocol = 'BullMQ Redis Job Stream';
+  if (t === 'database' && s !== 'server' && s !== 'pool') {
+    return { valid: false, warning: 'Only your servers (or PgBouncer) open connections to PostgreSQL.' };
   }
 
-  return {
-    valid: true,
-    protocol
-  };
+  let protocol = 'a connection';
+  if (s === 'browser' || s === 'balancer') protocol = 'HTTP';
+  else if (t === 'database') protocol = 'SQL, port 5432';
+  else if (t === 'pool') protocol = 'SQL via PgBouncer, port 6432';
+  else if (t === 'redis') protocol = 'Redis, port 6379';
+  else if (t === 'queue') protocol = 'the job queue';
+
+  return { valid: true, protocol };
 }

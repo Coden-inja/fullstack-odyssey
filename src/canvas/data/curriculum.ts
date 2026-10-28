@@ -1,910 +1,483 @@
 import { LevelDefinition } from '../types';
+import { browserNode, makeNode, makeWire } from './nodeFactory';
+
+// Every level opens with its problem live and the fix unwired: you see it fail,
+// then you build the repair. Text only uses concepts from data/concepts.ts that
+// this level or an earlier one introduced (checked by utils/conceptLint.ts).
+
+const yt = (id: string) => `https://www.youtube.com/watch?v=${id}`;
+const CAP = 250;
 
 export const CANVAS_CURRICULUM: LevelDefinition[] = [
-  // LEVEL 1
+  // ─────────────────────────────────────────────── LEVEL 1
   {
     id: 'level-1-starting-system',
     levelNumber: 1,
-    title: 'Level 1: The Starting System (One Server & One DB)',
-    subtitle: '1 Browser → 1 Physical Server → 1 Database',
+    title: 'The Starting System',
+    subtitle: 'One browser, one server, one database',
     inOneLine:
-      'One program asks another program a question over a TCP socket and halts completely until it receives an answer.',
-    scriptQuote:
-      'This is your starting architecture: one workstation, one monolith server running your app, and one PostgreSQL database. For modest traffic, this is rock solid. But in synchronous communication, the client and server are temporally coupled: both must be alive at the exact same instant.',
+      'A server is just a program waiting on a port. Bob’s browser sends it a request and then waits, doing nothing else, until the response comes back.',
     storyNarrative:
-      'A server is not a magical black box—it is a process listening on a port. When code calls server.listen(3000), the OS kernel registers the socket to route incoming TCP frames. In the Request-Response model, the client workstation opens a connection, sends an HTTP POST to reserve Seat 14C, and blocks waiting for bytes. Server 1 parses the payload, executes a SQL transaction on PostgreSQL, and returns 200 OK. If the server restarts right now, the client hangs indefinitely until socket timeout.',
-    historicalContext: 'Craigslist, Basecamp, and early StackOverflow served millions on a single robust machine with clean request-response semantics.',
-    officialReferences: [
-      {
-        name: 'backendengineer.in',
-        topic: 'What is a Server, Really?',
-        citation: 'Process, Port, Socket & Request-Response Fundamentals'
-      },
-      {
-        name: 'allahabadi.dev',
-        topic: 'Request-Response Pattern Explained From Zero',
-        citation: 'Temporal Coupling & Synchronous Communication Costs'
-      }
-    ],
+      'Bob wants seat 14C at Tokyo Dome. His browser is the client: it opens a connection to Server 1 on port 3000 and sends an HTTP request, POST /api/orders. Server 1 isn’t a special machine. It’s a program that called listen(3000) and loops forever waiting for bytes. It can’t keep bookings in its own memory (restart it and that memory is gone), so it sends SQL to a database, PostgreSQL, which writes the row to disk. The answers travel back the way they came: database to server, server to browser, ending in status code 200 OK. Every hop adds latency, and Bob’s browser waits for all of it. Nothing is plugged in yet: press Reserve first and see what happens, then wire it up.',
+    introduces: ['client', 'server', 'port', 'connection', 'http', 'request', 'response', 'database', 'sql', 'status-code', 'latency'],
     initialNodes: [
-      {
-        id: 'node-browser',
-        type: 'browser',
-        title: 'Client Workstation',
-        position: { x: 390, y: 130 },
-        ports: { inputs: ['in-resp'], outputs: ['out-req'] },
-        data: {
-          activeTab: 'Bob',
-          seatSelected: '14C',
-          price: 85,
-          status: 'idle',
-          lastLatencyMs: 28
-        }
-      },
-      {
-        id: 'node-server-1',
-        type: 'server',
-        title: 'Server 1 (Monolith)',
-        position: { x: 830, y: 130 },
-        ports: { inputs: ['in-http'], outputs: ['out-db', 'out-client'] },
-        data: {
-          instanceName: 'Server 1',
-          cpuUsage: 12,
-          memoryHeapMb: 240,
-          activeSockets: 4,
-          maxSockets: 128,
-          localSessions: { 'sess_bob_981a': 'Bob' }
-        }
-      },
-      {
-        id: 'node-db-primary',
-        type: 'database',
-        title: 'PostgreSQL DB (Primary)',
-        position: { x: 1180, y: 130 },
-        ports: { inputs: ['in-query'], outputs: ['out-data'] },
-        data: {
-          role: 'primary',
-          activeConnections: 6,
-          maxConnections: 100,
-          rowCount: 12480,
-          queryTimeMs: 4
-        }
-      }
+      browserNode(),
+      makeNode('node-server-1', 'server', 'Server 1', 460, 150),
+      makeNode('node-db-primary', 'database', 'PostgreSQL', 760, 150, { rows: 12480 })
     ],
-    initialWires: [
-      {
-        id: 'wire-browser-server',
-        sourceNodeId: 'node-browser',
-        sourcePortId: 'out-req',
-        targetNodeId: 'node-server-1',
-        targetPortId: 'in-http',
-        status: 'active'
-      },
-      {
-        id: 'wire-server-db',
-        sourceNodeId: 'node-server-1',
-        sourcePortId: 'out-db',
-        targetNodeId: 'node-db-primary',
-        targetPortId: 'in-query',
-        status: 'active'
-      }
+    initialWires: [],
+    simulatedTrafficRps: 1,
+    trafficControl: false,
+    mechanics: { serverCapacityRps: CAP },
+    goals: [
+      { kind: 'wire', from: 'node-browser', to: 'node-server-1', label: 'Plug Bob’s computer into Server 1' },
+      { kind: 'wire', from: 'node-server-1', to: 'node-db-primary', label: 'Connect Server 1 to the database' },
+      { kind: 'outcome', action: 'buy', status: 200, label: 'Reserve a seat and get 200 OK back' }
     ],
-    targetObjective:
-      'Click "Confirm & Reserve Seat 14C" on the workstation to trace the complete lifecycle: Browser POST -> Server 1 -> PostgreSQL DB -> WAL write -> 200 OK.',
-    requiredConnections: [
-      { fromType: 'browser', toType: 'server' },
-      { fromType: 'server', toType: 'database' }
+    solution: [
+      { kind: 'wire', from: 'node-browser', to: 'node-server-1', text: 'Drag from the round jack on the monitor’s right edge and drop on Server 1.' },
+      { kind: 'wire', from: 'node-server-1', to: 'node-db-primary', text: 'Drag from Server 1’s right dot and drop on PostgreSQL.' },
+      { kind: 'click', action: 'buy', text: 'Press Reserve on Bob’s screen and follow the request hop by hop.' }
     ],
-    simulatedTrafficRps: 10,
+    sources: [
+      { name: 'backendengineer.in', title: 'What is a Server, Really?', url: 'https://www.backendengineer.in/topics/what-is-a-server' },
+      { name: 'allahabadi.dev', title: 'Request-Response pattern', url: 'https://allahabadi.dev/backend-system-design/patterns/request-response/' },
+      { name: 'JavaScript Mastery', title: 'How Senior Engineers Actually Think About System Design & Architecture', url: yt('EaXHfuHRWwg') }
+    ],
+    facts: [
+      'The first message sent over ARPANET, on 29 October 1969, was “LO”. The receiving computer crashed before the rest of “LOGIN” arrived.',
+      'The first web server was Tim Berners-Lee’s NeXT computer at CERN. A handwritten label on it read: “This machine is a server. DO NOT POWER IT DOWN!!”',
+      'SQL began at IBM in the 1970s as SEQUEL, and was renamed because the name was already someone else’s trademark.'
+    ],
     quiz: {
-      question: 'What does "temporal coupling" mean in the classic Request-Response pattern?',
+      question: 'Bob presses Reserve while Server 1’s process is restarting. What happens?',
       options: [
-        'The request payload must contain an ISO-8601 UTC timestamp',
-        'Both the client and the server must be actively running at the exact same instant, or the exchange completely fails',
-        'The database must run on the exact same server as the application code',
-        'Requests can only be submitted once per hour'
+        'The request waits inside Server 1 until the process comes back',
+        'Nothing is listening on port 3000, so the connection is refused and Bob gets an error',
+        'PostgreSQL answers Bob directly instead',
+        'The browser saves the booking itself and sends it later'
       ],
       correctIndex: 1,
       explanation:
-        'In synchronous Request-Response, the client waits and cannot proceed without the answer. If the server is restarting or down at the instant of the request, nothing happens. A message queue removes this temporal coupling.',
-      referenceSource: {
-        title: 'allahabadi.dev / Backend System Design',
-        chapterOrSection: 'Pattern 01: Request-Response (Temporal Coupling)'
-      }
+        'A server is a running process. While it restarts, no program is listening on port 3000, so the operating system refuses the connection straight away. Request-response only works if client and server are both up at the same moment; otherwise the client has to try again.',
+      referenceSource: { title: 'allahabadi.dev', chapterOrSection: 'Request-Response pattern' }
     }
   },
 
-  // LEVEL 2
+  // ─────────────────────────────────────────────── LEVEL 2
   {
-    id: 'level-2-concurrency-wall',
+    id: 'level-2-ticket-drop',
     levelNumber: 2,
-    title: 'Level 2: The 10:00 AM Ticket Drop (The Concurrency Wall)',
-    subtitle: 'Traffic Surge & CPU Saturation',
+    title: 'The 10:00 AM Ticket Drop',
+    subtitle: 'More requests than one server can finish',
     inOneLine:
-      'When request arrival rate exceeds server worker capacity, requests don’t just wait politely—they hold threads hostage until the whole fleet times out.',
-    scriptQuote:
-      'At 10:00 AM sharp, thousands of fans hit the Tokyo Dome ticket drop simultaneously. Server 1 only has 128 worker slots. When requests arrive faster than the server can process them, queues back up until incoming connections fail with 504 Gateway Timeout.',
+      'A server can only finish so many requests per second. When more arrive than it can finish, they pile up, and everyone waits, not just the extra ones.',
     storyNarrative:
-      'At 10:00:00 AM, tickets for Tokyo Dome Live 2026 go on sale. 5,000 concert fans hit "Reserve Seat" in the same few seconds. Server 1 has a finite thread pool (128 worker slots). Because each checkout takes 250ms to query PostgreSQL and process payments, the server can only handle ~500 requests per second. With arrival traffic spiking past 650+ req/s, the operating system socket backlog (SOMAXCONN) completely overflows. Requests get held hostage in memory, queuing delay explodes toward infinity (Little’s Law), and every new fan sees 504 Gateway Timeout. A slow dependency is worse than a dead one: slow holds worker threads hostage until the entire server suffocates.',
-    historicalContext: 'Little’s Law ($L = \\lambda W$): when arrival rate exceeds service capacity, queue depth grows asymptotically toward infinity.',
-    officialReferences: [
-      {
-        name: 'allahabadi.dev',
-        topic: 'Why Slow is Worse Than Dead',
-        citation: 'Cascading Failures & Worker Pool Starvation'
-      },
-      {
-        name: 'backendengineer.in',
-        topic: 'Latency vs Throughput: The Tradeoff Nobody Names',
-        citation: 'The Concurrency Curve & Why 60% Capacity is Safer Than 100%'
-      }
-    ],
+      'At 10:00:00 the tickets go on sale and thousands of fans press Reserve within seconds. Each booking keeps Server 1’s CPU busy for a few milliseconds, so it can finish about 250 requests per second: that is its capacity. Below 250, requests finish as fast as they arrive. Above it the server is overloaded: every second more requests arrive than finish, and the extra ones pile up in memory. Little’s Law says the number of requests inside a system equals the arrival rate times how long each one stays. Push arrivals past capacity and the pile, and so the wait, grows every second. Bob’s request joins the back of the pile until his browser gives up: 504 Gateway Timeout. Nothing crashed. Server 1 is busy every millisecond, just never with Bob. There is no fix in this level: break it on purpose and watch how it fails.',
+    introduces: ['rps', 'capacity', 'cpu', 'overload', 'timeout', 'littles-law'],
     initialNodes: [
-      {
-        id: 'node-browser',
-        type: 'browser',
-        title: 'Client Workstation',
-        position: { x: 390, y: 130 },
-        ports: { inputs: ['in-resp'], outputs: ['out-req'] },
-        data: {
-          activeTab: 'Bob',
-          seatSelected: '14C',
-          price: 85,
-          status: 'idle',
-          lastLatencyMs: 24500
-        }
-      },
-      {
-        id: 'node-server-1',
-        type: 'server',
-        title: 'Server 1 (Overloaded)',
-        position: { x: 830, y: 130 },
-        ports: { inputs: ['in-http'], outputs: ['out-db', 'out-client'] },
-        data: {
-          instanceName: 'Server 1',
-          cpuUsage: 98,
-          memoryHeapMb: 940,
-          activeSockets: 128,
-          maxSockets: 128,
-          localSessions: { 'sess_bob_981a': 'Bob' }
-        }
-      },
-      {
-        id: 'node-db-primary',
-        type: 'database',
-        title: 'PostgreSQL DB',
-        position: { x: 1180, y: 130 },
-        ports: { inputs: ['in-query'], outputs: ['out-data'] },
-        data: {
-          role: 'primary',
-          activeConnections: 18,
-          maxConnections: 100,
-          rowCount: 12480,
-          queryTimeMs: 140
-        }
-      }
+      browserNode(),
+      makeNode('node-server-1', 'server', 'Server 1', 460, 150),
+      makeNode('node-db-primary', 'database', 'PostgreSQL', 760, 150, { rows: 12481 })
     ],
-    initialWires: [
-      {
-        id: 'wire-browser-server',
-        sourceNodeId: 'node-browser',
-        sourcePortId: 'out-req',
-        targetNodeId: 'node-server-1',
-        targetPortId: 'in-http',
-        status: 'congested'
-      },
-      {
-        id: 'wire-server-db',
-        sourceNodeId: 'node-server-1',
-        sourcePortId: 'out-db',
-        targetNodeId: 'node-db-primary',
-        targetPortId: 'in-query',
-        status: 'active'
-      }
+    initialWires: [makeWire('node-browser', 'node-server-1'), makeWire('node-server-1', 'node-db-primary')],
+    simulatedTrafficRps: 40,
+    trafficControl: true,
+    mechanics: { serverCapacityRps: CAP },
+    goals: [
+      { kind: 'traffic', minRps: 400, label: 'Drag traffic to the 10:00 AM rush: 400+ requests per second' },
+      { kind: 'outcome', action: 'buy', status: 504, label: 'Reserve during the rush and see what Bob gets' }
     ],
-    targetObjective:
-      'Attempt to reserve a seat during the 10:00 AM ticket drop. Watch Server 1 hit 98% CPU and return 504 Gateway Timeout.',
-    requiredConnections: [
-      { fromType: 'browser', toType: 'server' },
-      { fromType: 'server', toType: 'database' }
+    solution: [
+      { kind: 'traffic', rps: 450, text: 'Drag the traffic slider above 400 requests per second and watch Server 1’s CPU.' },
+      { kind: 'click', action: 'buy', text: 'Press Reserve and watch the request wait at Server 1.' }
     ],
-    simulatedTrafficRps: 650,
+    sources: [
+      { name: 'backendengineer.in', title: 'Latency vs Throughput: The Tradeoff Nobody Names', url: 'https://www.backendengineer.in/topics/latency-vs-throughput' },
+      { name: 'allahabadi.dev', title: 'Why slow is worse than dead', url: 'https://allahabadi.dev/backend-system-design/patterns/request-response/' }
+    ],
+    facts: [
+      'Little’s Law was proved by John Little in 1961. It holds for almost anything that things enter and leave: shops, highways, servers.',
+      'The first version of HTTP (0.9, 1991) had exactly one method, GET, and no status codes at all.'
+    ],
     quiz: {
-      question: 'What happens when incoming traffic rate exceeds a single server’s compute capacity?',
+      question: 'Server 1 finishes 250 requests per second and 400 arrive every second. After 10 seconds, about how many are waiting?',
       options: [
-        'The CPU automatically triples its clock speed',
-        'The OS socket queue fills up, causing packet drops and 504 Gateway Timeouts',
-        'The database permanently converts all tables to read-only',
-        'Incoming HTTP packets are compressed into single bits'
+        'None: it catches up eventually',
+        'About 1,500: 150 more pile up every second and none of them leave early',
+        'About 400',
+        'About 250'
       ],
       correctIndex: 1,
       explanation:
-        'When requests arrive faster than CPU execution time, OS socket buffers fill up, queuing delay spikes exponentially, and requests drop or time out.',
-      referenceSource: {
-        title: 'Designing Data-Intensive Applications (DDIA)',
-        chapterOrSection: 'Chapter 1: Reliability & Load'
-      }
+        '400 arrive and 250 finish each second, so 150 are added to the pile every second: 1,500 after 10 seconds. By Little’s Law the wait grows with the pile, which is why every new request, Bob’s included, ends in a timeout instead of only “the extra 150”.',
+      referenceSource: { title: 'backendengineer.in', chapterOrSection: 'Latency vs Throughput' }
     }
   },
 
-  // LEVEL 3
+  // ─────────────────────────────────────────────── LEVEL 3
   {
-    id: 'level-3-load-balancing',
+    id: 'level-3-second-copy',
     levelNumber: 3,
-    title: 'Level 3: Horizontal Scaling & The Load Balancer',
-    subtitle: 'Running Multiple Copies of Your App',
+    title: 'Run a Second Copy',
+    subtitle: 'Horizontal scaling and the load balancer',
     inOneLine:
-      'Instead of buying an impossibly large machine, place a reverse proxy in front to spread incoming traffic across identical stateless servers.',
-    scriptQuote:
-      'Instead of making one box stronger, you run several ordinary servers and split the people between them. These are three identical copies of your app running at the same time. But the moment you have more than one server, a request comes in: which server does it go to?',
+      'You can’t buy a CPU twice as fast, but you can run a second copy of the same program and send half the requests to each.',
     storyNarrative:
-      'Instead of buying a monster machine (vertical scaling), horizontal scaling runs multiple ordinary servers and splits the load. Why does this work? Statelessness! The server forgets you the instant it replies. Because it remembers nothing, any server can answer any request. An Nginx reverse proxy sits in front, distributing traffic using Least Connections so no worker pool drowns. But the moment a server tries to remember state in its local memory, the illusion shatters.',
-    historicalContext: 'Production reverse proxies (Nginx, Envoy, HAProxy) route traffic across stateless worker pools.',
-    officialReferences: [
-      {
-        name: 'backendengineer.in',
-        topic: 'Statelessness & Why It Matters',
-        citation: 'Phase 0 Fundamentals — Why Forgetting is Why the Web Scales'
-      },
-      {
-        name: 'allahabadi.dev',
-        topic: 'Horizontal Scaling & Load Balancing',
-        citation: 'Pattern 27 & 28 — The Stateless Fleet'
-      }
-    ],
+      'Making Server 1 bigger is vertical scaling: it works until you reach the biggest machine money can buy. Horizontal scaling runs another instance of the exact same program on a second machine. Server 2 is already running, but Bob’s browser can only connect to one address, so a load balancer (Nginx, in most real setups) sits in front. It accepts every request and forwards each one to an instance. Round-robin is the simplest rule: first request to Server 1, next to Server 2, then back to Server 1. Traffic is still at the 10:00 AM rush, 450 requests per second, and right now all of it goes to Server 1, so Reserve times out. Split across two instances it’s 225 each, under the 250 capacity. Server 2 needs its own connection to the database too.',
+    introduces: ['vertical-scaling', 'horizontal-scaling', 'instance', 'load-balancer', 'round-robin'],
     initialNodes: [
-      {
-        id: 'node-browser',
-        type: 'browser',
-        title: 'Client Workstation',
-        position: { x: 390, y: 130 },
-        ports: { inputs: ['in-resp'], outputs: ['out-req'] },
-        data: { activeTab: 'Bob', seatSelected: '14C', price: 85, status: 'idle', lastLatencyMs: 32 }
-      },
-      {
-        id: 'node-balancer',
-        type: 'balancer',
-        title: 'Nginx Load Balancer',
-        position: { x: 800, y: 130 },
-        ports: { inputs: ['in-client'], outputs: ['out-s1', 'out-s2'] },
-        data: { algorithm: 'least-connections', activeConns: 80 }
-      },
-      {
-        id: 'node-server-1',
-        type: 'server',
-        title: 'Server 1 (Instance A)',
-        position: { x: 1080, y: 50 },
-        ports: { inputs: ['in-http'], outputs: ['out-db'] },
-        data: { cpuUsage: 34, activeSockets: 18, maxSockets: 128 }
-      },
-      {
-        id: 'node-server-2',
-        type: 'server',
-        title: 'Server 2 (Instance B)',
-        position: { x: 1080, y: 230 },
-        ports: { inputs: ['in-http'], outputs: ['out-db'] },
-        data: { cpuUsage: 32, activeSockets: 16, maxSockets: 128 }
-      },
-      {
-        id: 'node-db-primary',
-        type: 'database',
-        title: 'PostgreSQL DB',
-        position: { x: 1380, y: 130 },
-        ports: { inputs: ['in-query'], outputs: ['out-data'] },
-        data: { activeConnections: 12, maxConnections: 100, rowCount: 12480, queryTimeMs: 6 }
-      }
+      browserNode(),
+      makeNode('node-balancer', 'balancer', 'Load balancer', 440, 170),
+      makeNode('node-server-1', 'server', 'Server 1', 710, 40),
+      makeNode('node-server-2', 'server', 'Server 2', 710, 300),
+      makeNode('node-db-primary', 'database', 'PostgreSQL', 980, 170, { rows: 12481 })
     ],
-    initialWires: [
-      {
-        id: 'wire-browser-lb',
-        sourceNodeId: 'node-browser',
-        sourcePortId: 'out-req',
-        targetNodeId: 'node-balancer',
-        targetPortId: 'in-client',
-        status: 'active'
-      },
-      {
-        id: 'wire-lb-s1',
-        sourceNodeId: 'node-balancer',
-        sourcePortId: 'out-s1',
-        targetNodeId: 'node-server-1',
-        targetPortId: 'in-http',
-        status: 'active'
-      },
-      {
-        id: 'wire-lb-s2',
-        sourceNodeId: 'node-balancer',
-        sourcePortId: 'out-s2',
-        targetNodeId: 'node-server-2',
-        targetPortId: 'in-http',
-        status: 'active'
-      },
-      {
-        id: 'wire-s1-db',
-        sourceNodeId: 'node-server-1',
-        sourcePortId: 'out-db',
-        targetNodeId: 'node-db-primary',
-        targetPortId: 'in-query',
-        status: 'active'
-      },
-      {
-        id: 'wire-s2-db',
-        sourceNodeId: 'node-server-2',
-        sourcePortId: 'out-db',
-        targetNodeId: 'node-db-primary',
-        targetPortId: 'in-query',
-        status: 'active'
-      }
-    ],
-    targetObjective:
-      'Send traffic through the Nginx Load Balancer. Verify CPU drops to ~33% across both instances simultaneously.',
-    requiredConnections: [
-      { fromType: 'browser', toType: 'balancer' },
-      { fromType: 'balancer', toType: 'server' }
-    ],
-    simulatedTrafficRps: 180,
-    quiz: {
-      question: 'Why does statelessness enable horizontal scaling across multiple servers?',
-      options: [
-        'Because stateless servers do not require an operating system',
-        'Because if a server remembers nothing about past requests, any identical server can answer any incoming request',
-        'Because statelessness disables HTTP error codes',
-        'Because statelessness doubles the physical network speed'
-      ],
-      correctIndex: 1,
-      explanation:
-        'Statelessness means the server holds zero conversational memory between requests. This allows a load balancer to spread traffic across a hundred servers without caring which machine served the previous click.',
-      referenceSource: {
-        title: 'backendengineer.in / Fundamentals',
-        chapterOrSection: 'Statelessness and Why it Matters'
-      }
-    }
-  },
-
-  // LEVEL 4
-  {
-    id: 'level-4-stateless-sessions',
-    levelNumber: 4,
-    title: 'Level 4: The Broken Login (Stateless Sessions & Redis)',
-    subtitle: 'Where Did My Session Go?',
-    inOneLine:
-      'If servers store user sessions in local RAM, routing the next request to another server treats the user like a complete stranger.',
-    scriptQuote:
-      'Bob logs in. His request lands on Server 1. Server 1 saves his login session in memory. Bob clicks "Buy Ticket". The load balancer sends this second request to Server 2. Server 2 looks in its memory, doesn’t find Bob, and throws 401 Unauthorized. Bob was just logged in a second ago! The solution: stop keeping session memory on individual servers.',
-    storyNarrative:
-      'Bob logs in on Server 1, and Server 1 saves his session in local process RAM. When Bob clicks "Confirm Seat", the load balancer routes him to Server 2. Server 2 checks its own RAM, finds nothing, and throws 401 Unauthorized! In distributed systems, local server RAM is a silo. The solution: move session tokens out of process memory into an ultra-fast in-memory Redis cluster. Now any server can verify Bob in 1 millisecond.',
-    historicalContext: 'Twelve-Factor App rule VI: Execute the app as one or more stateless processes.',
-    officialReferences: [
-      {
-        name: 'backendengineer.in',
-        topic: 'Statelessness & Session Management',
-        citation: 'Centralized Cache vs In-Memory Sticky Session Traps'
-      },
-      {
-        name: 'allahabadi.dev',
-        topic: 'Cache-Aside & Stateless Architecture',
-        citation: 'Pattern 14 — Externalizing Ephemeral State'
-      }
-    ],
-    initialNodes: [
-      {
-        id: 'node-browser',
-        type: 'browser',
-        title: 'Client Workstation',
-        position: { x: 50, y: 160 },
-        ports: { inputs: ['in-resp'], outputs: ['out-req'] },
-        data: { activeTab: 'Bob', seatSelected: '14C', price: 85, status: 'idle', lastLatencyMs: 35 }
-      },
-      {
-        id: 'node-balancer',
-        type: 'balancer',
-        title: 'Load Balancer',
-        position: { x: 310, y: 160 },
-        ports: { inputs: ['in-client'], outputs: ['out-s1', 'out-s2'] },
-        data: { algorithm: 'round-robin', activeConns: 60 }
-      },
-      {
-        id: 'node-server-1',
-        type: 'server',
-        title: 'Server 1',
-        position: { x: 550, y: 80 },
-        ports: { inputs: ['in-http'], outputs: ['out-db', 'out-redis'] },
-        data: { cpuUsage: 22, localSessions: { 'sess_bob_981a': 'Bob' } }
-      },
-      {
-        id: 'node-server-2',
-        type: 'server',
-        title: 'Server 2',
-        position: { x: 550, y: 250 },
-        ports: { inputs: ['in-http'], outputs: ['out-db', 'out-redis'] },
-        data: { cpuUsage: 24, localSessions: {} }
-      },
-      {
-        id: 'node-redis',
-        type: 'redis',
-        title: 'Redis Session Store',
-        position: { x: 800, y: 320 },
-        ports: { inputs: ['in-session'], outputs: ['out-ack'] },
-        data: { cachedKeys: 1420, cacheHitRate: 99.4, memoryMb: 18 }
-      },
-      {
-        id: 'node-db-primary',
-        type: 'database',
-        title: 'PostgreSQL DB',
-        position: { x: 860, y: 110 },
-        ports: { inputs: ['in-query'], outputs: ['out-data'] },
-        data: { activeConnections: 8, maxConnections: 100 }
-      }
-    ],
-    initialWires: [
-      {
-        id: 'wire-browser-lb',
-        sourceNodeId: 'node-browser',
-        sourcePortId: 'out-req',
-        targetNodeId: 'node-balancer',
-        targetPortId: 'in-client',
-        status: 'active'
-      },
-      {
-        id: 'wire-lb-s1',
-        sourceNodeId: 'node-balancer',
-        sourcePortId: 'out-s1',
-        targetNodeId: 'node-server-1',
-        targetPortId: 'in-http',
-        status: 'active'
-      },
-      {
-        id: 'wire-lb-s2',
-        sourceNodeId: 'node-balancer',
-        sourcePortId: 'out-s2',
-        targetNodeId: 'node-server-2',
-        targetPortId: 'in-http',
-        status: 'active'
-      },
-      {
-        id: 'wire-s1-db',
-        sourceNodeId: 'node-server-1',
-        sourcePortId: 'out-db',
-        targetNodeId: 'node-db-primary',
-        targetPortId: 'in-query',
-        status: 'active'
-      },
-      {
-        id: 'wire-s2-db',
-        sourceNodeId: 'node-server-2',
-        sourcePortId: 'out-db',
-        targetNodeId: 'node-db-primary',
-        targetPortId: 'in-query',
-        status: 'active'
-      }
-    ],
-    targetObjective:
-      'Connect both Server 1 and Server 2 to the Centralized Redis Store so Bob remains authenticated regardless of which server answers his request.',
-    requiredConnections: [
-      { fromType: 'server', toType: 'redis' }
-    ],
-    simulatedTrafficRps: 80,
-    quiz: {
-      question: 'What is the danger of storing user session IDs directly in a server’s local RAM?',
-      options: [
-        'The server runs out of disk storage immediately',
-        'If the user’s next request hits a different server copy, they appear logged out (401)',
-        'The database drops all primary keys',
-        'The browser refuses to accept any CSS styles'
-      ],
-      correctIndex: 1,
-      explanation:
-        'In multi-instance horizontal architectures, servers must be stateless. If state is stored locally, any request routed to another instance fails authentication.',
-      referenceSource: {
-        title: 'The Twelve-Factor App',
-        chapterOrSection: 'Factor VI: Processes (Execute the app as stateless processes)'
-      }
-    }
-  },
-
-  // LEVEL 5
-  {
-    id: 'level-5-database-choke',
-    levelNumber: 5,
-    title: 'Level 5: The Database Choke (Connection Pooling)',
-    subtitle: 'Too Many Sockets in Postgres',
-    inOneLine:
-      'A database connection is not free—each direct socket costs a separate OS process, 10MB of RAM, and heavy TLS handshakes.',
-    scriptQuote:
-      'You scaled your servers to 10 instances. Traffic is handled, CPU is cool. But now every server opens 50 connections to PostgreSQL. That’s 500 connections. PostgreSQL forks an OS process for every single socket, eating 10MB each. The database memory explodes and queries crawl to a halt.',
-    storyNarrative:
-      'Connecting to a database is just another request-response exchange over TCP. But unlike Node.js which handles 50,000 sockets on one thread, PostgreSQL forks a separate POSIX OS process for every socket (eating 10MB RAM each). Establishing a new connection takes 40ms of TCP/TLS handshakes and backend forks. 500 direct sockets cause 5GB of memory thrashing. Connection pooling maintains a warm pool of open sockets, cutting latency to 19ms and shielding the database from socket exhaustion.',
-    historicalContext: 'Hussein Nasser benchmark: Direct TLS connection takes 40ms; connection pooling reuses established sockets in 19ms.',
-    officialReferences: [
-      {
-        name: 'backendengineer.in',
-        topic: 'Process, Port, Socket & Connection Pooling',
-        citation: 'Why Direct Database Sockets Exhaust Server Memory'
-      },
-      {
-        name: 'PostgreSQL Manual Chapter 20',
-        topic: 'Resource Consumption & Connections',
-        citation: 'Section 20.3: max_connections and shared_buffers'
-      }
-    ],
-    initialNodes: [
-      {
-        id: 'node-browser',
-        type: 'browser',
-        title: 'Client Workstation',
-        position: { x: 50, y: 160 },
-        ports: { inputs: ['in-resp'], outputs: ['out-req'] },
-        data: { activeTab: 'Bob', seatSelected: '14C', price: 85, status: 'idle', lastLatencyMs: 40 }
-      },
-      {
-        id: 'node-server-1',
-        type: 'server',
-        title: 'Server Cluster (10x)',
-        position: { x: 420, y: 160 },
-        ports: { inputs: ['in-http'], outputs: ['out-db'] },
-        data: { instanceName: '10 Instances', activeSockets: 180, maxSockets: 200 }
-      },
-      {
-        id: 'node-db-primary',
-        type: 'database',
-        title: 'PostgreSQL DB (Crashed)',
-        position: { x: 800, y: 160 },
-        ports: { inputs: ['in-query'], outputs: ['out-data'] },
-        data: { activeConnections: 100, maxConnections: 100, queryTimeMs: 480 }
-      }
-    ],
-    initialWires: [
-      {
-        id: 'wire-browser-server',
-        sourceNodeId: 'node-browser',
-        sourcePortId: 'out-req',
-        targetNodeId: 'node-server-1',
-        targetPortId: 'in-http',
-        status: 'active'
-      },
-      {
-        id: 'wire-server-db',
-        sourceNodeId: 'node-server-1',
-        sourcePortId: 'out-db',
-        targetNodeId: 'node-db-primary',
-        targetPortId: 'in-query',
-        status: 'congested'
-      }
-    ],
-    targetObjective:
-      'Configure connection pooling (pool.query) to multiplex 180 client sockets onto 20 persistent PostgreSQL processes.',
-    requiredConnections: [
-      { fromType: 'server', toType: 'database' }
-    ],
-    simulatedTrafficRps: 240,
-    quiz: {
-      question: 'Why does PostgreSQL degrade when opening hundreds of direct client connections?',
-      options: [
-        'PostgreSQL forks a dedicated POSIX operating system process for each connection, causing RAM exhaustion and CPU context switching',
-        'PostgreSQL requires manual approval for every socket connection from an administrator',
-        'PostgreSQL only supports 1 connection per database',
-        'Direct connections invert the endianness of integers'
-      ],
-      correctIndex: 0,
-      explanation:
-        'Unlike event-driven servers, PostgreSQL uses a process-based model. Each backend process takes 5–10MB of RAM. High connection counts thrash the CPU in context switches.',
-      referenceSource: {
-        title: 'PostgreSQL Documentation',
-        chapterOrSection: 'Chapter 20: Server Configuration — max_connections'
-      }
-    }
-  },
-
-  // LEVEL 6
-  {
-    id: 'level-6-cache-stampede',
-    levelNumber: 6,
-    title: 'Level 6: The Cache Stampede (Redis Cache-Aside)',
-    subtitle: '4,800 Identical Queries Crushing Disk',
-    inOneLine:
-      'The fastest database query is the one you never execute—serve hot reads directly from memory to save your disk from melting.',
-    scriptQuote:
-      '4,800 users refresh the page to see how many tickets are left. Your servers execute the exact same heavy SQL query: SELECT count(*) FROM tickets WHERE status=\'available\'. Why ask the database 4,800 times for a number that only changes when someone buys? Put Redis in front of the database.',
-    storyNarrative:
-      'Cache-Aside: check the cache first, and go to the database only if it misses. Reading from Redis RAM takes 1ms; reading from disk takes 14ms. But beware the classic production trap: Cache Stampede (Thundering Herd). When a popular cached key expires, ten thousand concurrent requests miss at the exact same millisecond and hammer the primary database simultaneously. Probabilistic early expiration (XFetch) and single-flight mutexes stop the stampede.',
-    historicalContext: 'Facebook NSDI 2013 paper: Memcached leases reduced peak DB query rate from 17,000 QPS to 1,300 QPS.',
-    officialReferences: [
-      {
-        name: 'allahabadi.dev',
-        topic: 'Cache-Aside & Cache Stampede Prevention',
-        citation: 'Patterns 14 & 18 — How One Expired Key Takes Down a Database'
-      },
-      {
-        name: 'backendengineer.in',
-        topic: 'LRU Caches & Hash Maps in Context',
-        citation: 'Phase 3 Algorithms — In-Memory Eviction Mechanics'
-      }
-    ],
-    initialNodes: [
-      {
-        id: 'node-browser',
-        type: 'browser',
-        title: 'Client Workstation',
-        position: { x: 50, y: 160 },
-        ports: { inputs: ['in-resp'], outputs: ['out-req'] },
-        data: { activeTab: 'Bob', seatSelected: '14C', price: 85, status: 'idle', lastLatencyMs: 12 }
-      },
-      {
-        id: 'node-server-1',
-        type: 'server',
-        title: 'App Server',
-        position: { x: 420, y: 160 },
-        ports: { inputs: ['in-http'], outputs: ['out-cache', 'out-db'] },
-        data: { cpuUsage: 28, activeSockets: 14 }
-      },
-      {
-        id: 'node-redis-cache',
-        type: 'redis',
-        title: 'Redis Cache (RAM)',
-        position: { x: 740, y: 80 },
-        ports: { inputs: ['in-cache'], outputs: ['out-miss'] },
-        data: { cachedKeys: 420, cacheHitRate: 96.2, memoryMb: 12 }
-      },
-      {
-        id: 'node-db-primary',
-        type: 'database',
-        title: 'PostgreSQL DB',
-        position: { x: 780, y: 260 },
-        ports: { inputs: ['in-query'], outputs: ['out-data'] },
-        data: { activeConnections: 12, maxConnections: 100, queryTimeMs: 14 }
-      }
-    ],
-    initialWires: [
-      {
-        id: 'wire-browser-server',
-        sourceNodeId: 'node-browser',
-        sourcePortId: 'out-req',
-        targetNodeId: 'node-server-1',
-        targetPortId: 'in-http',
-        status: 'active'
-      },
-      {
-        id: 'wire-server-cache',
-        sourceNodeId: 'node-server-1',
-        sourcePortId: 'out-cache',
-        targetNodeId: 'node-redis-cache',
-        targetPortId: 'in-cache',
-        status: 'active'
-      },
-      {
-        id: 'wire-cache-db',
-        sourceNodeId: 'node-redis-cache',
-        sourcePortId: 'out-miss',
-        targetNodeId: 'node-db-primary',
-        targetPortId: 'in-query',
-        status: 'active'
-      }
-    ],
-    targetObjective:
-      'Route hot seat-availability queries to Redis Cache. Observe response latency drop from 14ms disk I/O to 1ms in-memory RAM.',
-    requiredConnections: [
-      { fromType: 'server', toType: 'redis' },
-      { fromType: 'redis', toType: 'database' }
-    ],
+    initialWires: [makeWire('node-browser', 'node-server-1'), makeWire('node-server-1', 'node-db-primary')],
     simulatedTrafficRps: 450,
+    trafficControl: true,
+    mechanics: { serverCapacityRps: CAP },
+    goals: [
+      { kind: 'wire', from: 'node-browser', to: 'node-balancer', label: 'Move Bob’s cable to the load balancer' },
+      { kind: 'wire', from: 'node-balancer', to: 'node-server-1', label: 'Load balancer → Server 1' },
+      { kind: 'wire', from: 'node-balancer', to: 'node-server-2', label: 'Load balancer → Server 2' },
+      { kind: 'wire', from: 'node-server-2', to: 'node-db-primary', label: 'Server 2 → PostgreSQL' },
+      { kind: 'outcome', action: 'buy', status: 200, minRps: 400, label: 'Reserve during the rush (400+ requests per second) and get 200 OK' }
+    ],
+    solution: [
+      { kind: 'wire', from: 'node-browser', to: 'node-balancer', text: 'Drag from the monitor’s jack to the load balancer. The old cable comes out by itself: one jack, one cable.' },
+      { kind: 'wire', from: 'node-balancer', to: 'node-server-1', text: 'Drag from the load balancer’s right dot to Server 1.' },
+      { kind: 'wire', from: 'node-balancer', to: 'node-server-2', text: 'Drag from the load balancer’s right dot to Server 2.' },
+      { kind: 'wire', from: 'node-server-2', to: 'node-db-primary', text: 'Drag from Server 2’s right dot to PostgreSQL.' },
+      { kind: 'click', action: 'buy', text: 'Press Reserve: the rush is still on, and now it holds.' }
+    ],
+    sources: [
+      { name: 'ByteByteGo', title: 'Top 6 Load Balancing Algorithms Every Developer Should Know', url: yt('dBmxNsS3BGE') },
+      { name: 'JavaScript Mastery', title: 'How Senior Engineers Actually Think About System Design & Architecture', url: yt('EaXHfuHRWwg') }
+    ],
+    facts: [
+      'Nginx was written by Igor Sysoev to handle 10,000 simultaneous connections on one machine, a challenge named “the C10k problem” in 1999.',
+      'For about a year info.cern.ch was the only web server in the world. The first one in America, at SLAC in California, went up in December 1991.'
+    ],
     quiz: {
-      question: 'What is a Cache Stampede (or Thundering Herd)?',
-      options: [
-        'A bug that deletes all cache memory simultaneously',
-        'When a popular cached key expires, and thousands of concurrent requests all hit the primary database at once to recompute it',
-        'A memory leak caused by unclosed Redis connections',
-        'When CSS files fail to load from CDN'
-      ],
+      question:
+        'Two instances, each with a capacity of 250 requests per second, sit behind a round-robin load balancer. What’s the most traffic they can take before requests pile up?',
+      options: ['250 requests per second', '500 requests per second', '1,000 requests per second', 'No limit: the load balancer absorbs the rest'],
       correctIndex: 1,
       explanation:
-        'When a hot key expires under load, every concurrent request experiences a cache miss simultaneously and hammers the database. XFetch and single-flight mutexes solve this.',
-      referenceSource: {
-        title: 'Optimal Probabilistic Cache Stampede Prevention',
-        chapterOrSection: 'VLDB 2015 (Vattani et al.) — The XFetch Algorithm'
-      }
+        'Round-robin gives each instance half the requests, so each reaches its 250 limit when 500 arrive in total. Past that you’re back in Level 2, just with two piles. The load balancer only forwards requests; it doesn’t do the work.',
+      referenceSource: { title: 'ByteByteGo', chapterOrSection: 'Top 6 Load Balancing Algorithms Every Developer Should Know' }
     }
   },
 
-  // LEVEL 7
+  // ─────────────────────────────────────────────── LEVEL 4
   {
-    id: 'level-7-slow-checkout-queues',
+    id: 'level-4-broken-login',
+    levelNumber: 4,
+    title: 'The Broken Login',
+    subtitle: 'Where did Bob’s session go?',
+    inOneLine: 'If a server keeps who-you-are in its own memory, the next request that lands on a different instance meets a stranger.',
+    storyNarrative:
+      'Bob logged in a minute ago and that request happened to land on Server 1. Server 1 created a session, 8f3a → Bob, kept it in its own process memory, and gave the browser a cookie holding sid=8f3a. The browser sends that cookie with every request. Press Reserve twice: round-robin sends the first to Server 1, which knows Bob, and the second to Server 2, which looks up 8f3a in its own memory, finds nothing and answers 401 Unauthorized. Server 1 is stateful: it holds something the other instance doesn’t. The fix is to make both instances stateless. Move sessions out of process memory into Redis, a separate in-memory key-value store that every instance connects to. Then any instance can look up 8f3a in under a millisecond.',
+    introduces: ['session', 'cookie', '401', 'stateless', 'redis'],
+    initialNodes: [
+      browserNode(),
+      makeNode('node-balancer', 'balancer', 'Load balancer', 440, 170),
+      makeNode('node-server-1', 'server', 'Server 1', 710, 40, { localSessions: ['Bob'] }),
+      makeNode('node-server-2', 'server', 'Server 2', 710, 300, { localSessions: [] }),
+      makeNode('node-redis', 'redis', 'Redis sessions', 980, 300, { role: 'session' }),
+      makeNode('node-db-primary', 'database', 'PostgreSQL', 980, 40, { rows: 12482 })
+    ],
+    initialWires: [
+      makeWire('node-browser', 'node-balancer'),
+      makeWire('node-balancer', 'node-server-1'),
+      makeWire('node-balancer', 'node-server-2'),
+      makeWire('node-server-1', 'node-db-primary'),
+      makeWire('node-server-2', 'node-db-primary')
+    ],
+    simulatedTrafficRps: 200,
+    trafficControl: true,
+    mechanics: { serverCapacityRps: CAP, sessions: true },
+    goals: [
+      { kind: 'wire', from: 'node-server-1', to: 'node-redis', label: 'Server 1 → Redis' },
+      { kind: 'wire', from: 'node-server-2', to: 'node-redis', label: 'Server 2 → Redis' },
+      { kind: 'outcome', action: 'buy', status: 200, servedBy: 'node-server-2', label: 'Get a 200 OK answered by Server 2' }
+    ],
+    solution: [
+      { kind: 'wire', from: 'node-server-1', to: 'node-redis', text: 'Drag from Server 1’s right dot to Redis, so the session it created is stored there.' },
+      { kind: 'wire', from: 'node-server-2', to: 'node-redis', text: 'Drag from Server 2’s right dot to Redis, so it can look sessions up there.' },
+      { kind: 'click', action: 'buy', text: 'Press Reserve twice: round-robin sends one of them to Server 2.' }
+    ],
+    sources: [
+      { name: 'The Twelve-Factor App', title: 'VI. Processes: execute the app as one or more stateless processes', url: 'https://12factor.net/processes' },
+      { name: 'JavaScript Mastery', title: 'How Senior Engineers Actually Think About System Design & Architecture', url: yt('EaXHfuHRWwg') }
+    ],
+    facts: [
+      'Cookies were invented in 1994 by Lou Montulli at Netscape, so an online shopping cart could remember what you’d put in it.',
+      'Redis was written by Salvatore Sanfilippo in 2009 to make his own real-time web analytics product fast enough.'
+    ],
+    quiz: {
+      question: 'Instead of Redis, you configure the load balancer to always send Bob to Server 1. What breaks?',
+      options: [
+        'Nothing: this is just as good',
+        'When Server 1 restarts, every session in its memory is gone and those users are logged out',
+        'Server 2 receives all the traffic',
+        'The browser stops sending cookies'
+      ],
+      correctIndex: 1,
+      explanation:
+        'Pinning each user to one instance (often called sticky sessions) hides the problem but keeps the servers stateful. Restart or remove Server 1 and everyone it remembered is a stranger again. With sessions in Redis, any instance can disappear and nobody is logged out.',
+      referenceSource: { title: 'The Twelve-Factor App', chapterOrSection: 'VI. Processes' }
+    }
+  },
+
+  // ─────────────────────────────────────────────── LEVEL 5
+  {
+    id: 'level-5-too-many-connections',
+    levelNumber: 5,
+    title: 'Too Many Connections',
+    subtitle: 'Four instances, one PostgreSQL',
+    inOneLine:
+      'PostgreSQL runs a whole process for every connection, so it caps them, and a handful of instances each opening their own blow straight through the cap.',
+    storyNarrative:
+      'Traffic kept growing, so you now run 4 instances behind the load balancer. From here on they’re drawn as one box: the fleet. Each instance opens 30 connections to PostgreSQL so it can run 30 queries at once: 4 × 30 = 120. PostgreSQL works differently from your server. It starts a separate operating-system process for every connection, 5–10 MB of memory each, so it enforces a connection limit: max_connections = 100. Connection 101 is refused with “FATAL: sorry, too many clients already”, and Bob’s booking fails with 500. A connection pool such as PgBouncer sits between the fleet and the database. It keeps 20 real connections open and lets every instance borrow one for the few milliseconds a query takes, then hand it back. Opening a brand-new connection costs around 40 ms of back-and-forth before the first query; borrowing an open one skips that.',
+    introduces: ['fleet', 'connection-limit', 'connection-pool'],
+    hiddenInfra: ['sessions'],
+    hiddenNote: 'The Redis session store from Level 4 is still running. It’s hidden here so the database problem is easier to see.',
+    initialNodes: [
+      browserNode(),
+      makeNode('node-balancer', 'balancer', 'Load balancer', 440, 170),
+      makeNode('node-fleet', 'server', 'App fleet', 710, 170, { instances: 4, connsPerInstance: 30 }),
+      makeNode('node-pool', 'pool', 'PgBouncer', 980, 330, { poolSize: 20 }),
+      makeNode('node-db-primary', 'database', 'PostgreSQL', 1250, 170, { rows: 1_204_480, maxConnections: 100 })
+    ],
+    initialWires: [
+      makeWire('node-browser', 'node-balancer'),
+      makeWire('node-balancer', 'node-fleet'),
+      makeWire('node-fleet', 'node-db-primary')
+    ],
+    simulatedTrafficRps: 600,
+    trafficControl: true,
+    mechanics: { serverCapacityRps: CAP, connectionLimit: true },
+    goals: [
+      { kind: 'wire', from: 'node-fleet', to: 'node-pool', label: 'App fleet → PgBouncer' },
+      { kind: 'wire', from: 'node-pool', to: 'node-db-primary', label: 'PgBouncer → PostgreSQL' },
+      { kind: 'noWire', fromType: 'server', toType: 'database', label: 'Cut the fleet’s direct wire to PostgreSQL' },
+      { kind: 'outcome', action: 'buy', status: 200, label: 'Reserve and get 200 OK' }
+    ],
+    solution: [
+      { kind: 'wire', from: 'node-fleet', to: 'node-pool', text: 'Drag from the fleet’s right dot to PgBouncer.' },
+      { kind: 'wire', from: 'node-pool', to: 'node-db-primary', text: 'Drag from PgBouncer’s right dot to PostgreSQL.' },
+      { kind: 'unwire', from: 'node-fleet', to: 'node-db-primary', text: 'Hover the direct fleet → PostgreSQL wire and click the ✕ in its middle.' },
+      { kind: 'click', action: 'buy', text: 'Press Reserve: the query now borrows one of PgBouncer’s connections.' }
+    ],
+    sources: [
+      { name: 'Hussein Nasser', title: 'Connection Pooling in PostgreSQL with NodeJS (Performance Numbers)', url: yt('GTeCtIoV2Tw') },
+      { name: 'Arjay McCandless', title: 'What is Connection Pooling?', url: yt('qIS5lNj1b5w') },
+      { name: 'PostgreSQL docs', title: 'Connections and Authentication: max_connections', url: 'https://www.postgresql.org/docs/current/runtime-config-connection.html' }
+    ],
+    facts: [
+      'PostgreSQL grew out of POSTGRES, a research project Michael Stonebraker started at UC Berkeley in 1986.',
+      'PgBouncer was written at Skype around 2007, back when Skype’s backend ran on PostgreSQL.'
+    ],
+    quiz: {
+      question: 'PgBouncer keeps 20 connections open. What does it actually save?',
+      options: [
+        'It merges 20 queries into one before sending them',
+        'It skips opening a new connection per query and keeps PostgreSQL under its connection limit',
+        'It stores query results in memory so PostgreSQL is asked less often',
+        'It makes PostgreSQL read the disk faster'
+      ],
+      correctIndex: 1,
+      explanation:
+        'A common belief is that pooling batches queries. It doesn’t: each query still runs on its own. What it removes is the cost of opening connections (about 40 ms each in Hussein Nasser’s Node.js benchmark, against about 19 ms with a pool) and the hundreds of PostgreSQL processes that direct connections would create.',
+      referenceSource: { title: 'Hussein Nasser', chapterOrSection: 'Connection Pooling in PostgreSQL with NodeJS (Performance Numbers)' }
+    }
+  },
+
+  // ─────────────────────────────────────────────── LEVEL 6
+  {
+    id: 'level-6-read-flood',
+    levelNumber: 6,
+    title: 'Everyone Hits Refresh',
+    subtitle: 'The same question, 3,000 times a second',
+    inOneLine:
+      'When the same expensive answer is asked for thousands of times a second and only changes when someone books, work it out once and keep a copy in memory.',
+    storyNarrative:
+      'Every fan keeps refreshing the seat map. Each refresh runs SELECT count(*) FROM seats WHERE status = ‘free’, a query that walks every seat row. That’s 3,000 identical queries a second, and PostgreSQL can finish about 800. PgBouncer protects the connection limit, not the database’s CPU: queries wait their turn, and refreshes and bookings alike time out. The system is read-heavy: thousands of reads for every write. A cache fixes it. This Redis is used differently from the session store: the server first asks it for seats:free. If the copy is there (a hit), it answers in about 1 ms and PostgreSQL is never asked. If not (a miss), it runs the count once, stores the answer with a TTL of 5 seconds, and returns it. PostgreSQL now runs the count about once every 5 seconds. What breaks next: when that copy expires, every request misses at the same moment and they all hit the database together. That is a cache stampede.',
+    introduces: ['read-heavy', 'cache', 'ttl', 'cache-stampede'],
+    hiddenInfra: ['sessions'],
+    hiddenNote: 'The Redis session store is still running, hidden.',
+    initialNodes: [
+      browserNode(),
+      makeNode('node-balancer', 'balancer', 'Load balancer', 440, 170),
+      makeNode('node-fleet', 'server', 'App fleet', 710, 170, { instances: 14, connsPerInstance: 30 }),
+      makeNode('node-cache', 'redis', 'Redis cache', 980, 10, { role: 'cache' }),
+      makeNode('node-pool', 'pool', 'PgBouncer', 980, 330, { poolSize: 20 }),
+      makeNode('node-db-primary', 'database', 'PostgreSQL', 1250, 330, { rows: 1_904_220, maxConnections: 100, queryCapacity: 800 })
+    ],
+    initialWires: [
+      makeWire('node-browser', 'node-balancer'),
+      makeWire('node-balancer', 'node-fleet'),
+      makeWire('node-fleet', 'node-pool'),
+      makeWire('node-pool', 'node-db-primary')
+    ],
+    simulatedTrafficRps: 3000,
+    trafficControl: true,
+    mechanics: { serverCapacityRps: CAP, connectionLimit: true, readHeavy: true },
+    goals: [
+      { kind: 'wire', from: 'node-fleet', to: 'node-cache', label: 'App fleet → Redis cache' },
+      { kind: 'outcome', action: 'browse', status: 200, minRps: 2000, label: 'Refresh the seat map during the flood and get 200 OK' },
+      { kind: 'outcome', action: 'buy', status: 200, minRps: 2000, label: 'Reserve a seat during the flood and get 200 OK' }
+    ],
+    solution: [
+      { kind: 'wire', from: 'node-fleet', to: 'node-cache', text: 'Drag from the fleet’s right dot to the Redis cache.' },
+      { kind: 'click', action: 'browse', text: 'Press ↻ next to “Free seats” on Bob’s screen. The first time is a miss; press it again for a hit.' },
+      { kind: 'click', action: 'buy', text: 'Press Reserve: PostgreSQL has room for bookings again.' }
+    ],
+    sources: [
+      { name: 'Hello Interview', title: '4 Ways to Fix Cache Stampede', url: yt('MPFkGLZGe9M') },
+      { name: 'Yash Mantri', title: 'Cache Stampede and How to Prevent It', url: yt('WGiHw5Ioi1g') }
+    ],
+    facts: [
+      'Memcached, the cache much of the early web leaned on, was written by Brad Fitzpatrick in 2003 for LiveJournal.',
+      'Facebook’s 2013 paper “Scaling Memcache at Facebook” describes leases: only one request may recompute an expired copy while the rest wait for it.'
+    ],
+    quiz: {
+      question: 'The free-seat count is cached with a 5-second TTL. A fan books seat 14C. What can other fans see for up to 5 seconds?',
+      options: [
+        'The new count, immediately',
+        'The old count: the cached copy only changes when its TTL runs out',
+        'An error page',
+        'Nothing until PostgreSQL restarts'
+      ],
+      correctIndex: 1,
+      explanation:
+        'A cache trades freshness for speed. A free-seat counter up to 5 seconds old is fine; the booking itself still goes straight to PostgreSQL, so two fans can never get the same seat. Choosing a TTL is choosing how stale an answer you can live with.',
+      referenceSource: { title: 'Hello Interview', chapterOrSection: '4 Ways to Fix Cache Stampede' }
+    }
+  },
+
+  // ─────────────────────────────────────────────── LEVEL 7
+  {
+    id: 'level-7-slow-checkout',
     levelNumber: 7,
-    title: 'Level 7: The Slow Checkout (Asynchronous Worker Queues)',
-    subtitle: 'Why Is Checkout Taking 3.2 Seconds?',
-    inOneLine:
-      'Never make a user wait for work that can happen in the background—acknowledge the checkout immediately and let worker queues handle the heavy lifting.',
-    scriptQuote:
-      'When the user clicks "Pay", you charge their card, generate a 5-page PDF invoice, send a transactional confirmation email, and log telemetry. The user is staring at a loading spinner for 3.2 seconds. Move slow jobs out of the HTTP request loop into a background queue.',
+    title: 'The Slow Checkout',
+    subtitle: 'Why does booking take 3.2 seconds?',
+    inOneLine: 'Ask of every step: if this fails, should the booking fail? If not, the user shouldn’t be waiting for it.',
     storyNarrative:
-      'Apply the golden test: "If sending this email or rendering this PDF fails, should the user\'s ticket purchase fail?" Obviously not! So the user should never wait for it. In synchronous Request-Response, waiting is not free—it pins a server worker and socket for 3.2 seconds. Keep only the critical path synchronous (write booking to DB), return 202 Accepted in 18ms, and push PDF and email work to a BullMQ Redis queue where background workers chew through them.',
-    historicalContext: 'Enterprise Integration Patterns: Message Queue decoupling between fast synchronous API layers and slow asynchronous worker consumers.',
-    officialReferences: [
-      {
-        name: 'allahabadi.dev',
-        topic: 'The Golden Test for Synchronous vs Asynchronous',
-        citation: 'Message Queues vs Request-Response: Stop Asking the User to Wait'
-      },
-      {
-        name: 'backendengineer.in',
-        topic: 'Synchronous vs Asynchronous Before Touching Code',
-        citation: 'Phase 0 Fundamentals — Event Loop & Job Queue Mechanics'
-      }
-    ],
+      'After saving the booking, the server renders a PDF ticket (1.8 s) and sends a confirmation email through an email provider (1.4 s). All of it is synchronous: one step, wait, the next step, wait, and only then the response. Bob stares at a spinner for 3.2 seconds while an instance sits blocked. Apply the test: if the email fails, should Bob lose his seat? No. Then he shouldn’t wait for it. Make it asynchronous: save the booking (the part that must succeed), add a job “send ticket to user 42, seat 14C” to a job queue (BullMQ, which keeps jobs in Redis), and respond straight away. A separate worker process takes jobs off the queue and does the slow part a moment later. If the email provider is down, the job waits and is retried; the booking is already safe.',
+    introduces: ['synchronous', 'asynchronous', 'job-queue', 'worker'],
+    hiddenInfra: ['sessions', 'cache'],
+    hiddenNote: 'The session store and the seat-count cache are still running, hidden.',
     initialNodes: [
-      {
-        id: 'node-browser',
-        type: 'browser',
-        title: 'Client Workstation',
-        position: { x: 50, y: 160 },
-        ports: { inputs: ['in-resp'], outputs: ['out-req'] },
-        data: { activeTab: 'Bob', seatSelected: '14C', price: 85, status: 'idle', lastLatencyMs: 3200 }
-      },
-      {
-        id: 'node-server-1',
-        type: 'server',
-        title: 'App Server',
-        position: { x: 420, y: 160 },
-        ports: { inputs: ['in-http'], outputs: ['out-queue', 'out-db'] },
-        data: { cpuUsage: 45 }
-      },
-      {
-        id: 'node-queue',
-        type: 'queue',
-        title: 'BullMQ Job Queue',
-        position: { x: 740, y: 280 },
-        ports: { inputs: ['in-job'], outputs: ['out-worker'] },
-        data: { depth: 4, workersActive: 3 }
-      },
-      {
-        id: 'node-db-primary',
-        type: 'database',
-        title: 'PostgreSQL DB',
-        position: { x: 740, y: 80 },
-        ports: { inputs: ['in-query'], outputs: ['out-data'] },
-        data: { activeConnections: 10, maxConnections: 100 }
-      }
+      browserNode(),
+      makeNode('node-balancer', 'balancer', 'Load balancer', 440, 170),
+      makeNode('node-fleet', 'server', 'App fleet', 710, 170, { instances: 4, connsPerInstance: 30 }),
+      makeNode('node-pool', 'pool', 'PgBouncer', 980, 60, { poolSize: 20 }),
+      makeNode('node-queue', 'queue', 'Job queue', 980, 340),
+      makeNode('node-db-primary', 'database', 'PostgreSQL', 1250, 60, { rows: 2_310_904, maxConnections: 100 })
     ],
     initialWires: [
-      {
-        id: 'wire-browser-server',
-        sourceNodeId: 'node-browser',
-        sourcePortId: 'out-req',
-        targetNodeId: 'node-server-1',
-        targetPortId: 'in-http',
-        status: 'active'
-      },
-      {
-        id: 'wire-server-queue',
-        sourceNodeId: 'node-server-1',
-        sourcePortId: 'out-queue',
-        targetNodeId: 'node-queue',
-        targetPortId: 'in-job',
-        status: 'active'
-      },
-      {
-        id: 'wire-server-db',
-        sourceNodeId: 'node-server-1',
-        sourcePortId: 'out-db',
-        targetNodeId: 'node-db-primary',
-        targetPortId: 'in-query',
-        status: 'active'
-      }
+      makeWire('node-browser', 'node-balancer'),
+      makeWire('node-balancer', 'node-fleet'),
+      makeWire('node-fleet', 'node-pool'),
+      makeWire('node-pool', 'node-db-primary')
     ],
-    targetObjective:
-      'Offload the 3.2s invoice generation and receipt email to BullMQ. The client receives 202 Accepted in under 20ms.',
-    requiredConnections: [
-      { fromType: 'server', toType: 'queue' }
+    simulatedTrafficRps: 600,
+    trafficControl: true,
+    mechanics: { serverCapacityRps: CAP, connectionLimit: true, slowSideEffects: true },
+    goals: [
+      { kind: 'wire', from: 'node-fleet', to: 'node-queue', label: 'App fleet → job queue' },
+      { kind: 'outcome', action: 'buy', status: 200, maxLatencyMs: 500, label: 'Reserve and get 200 OK in under 500 ms' }
     ],
-    simulatedTrafficRps: 120,
+    solution: [
+      { kind: 'wire', from: 'node-fleet', to: 'node-queue', text: 'Drag from the fleet’s right dot to the job queue.' },
+      { kind: 'click', action: 'buy', text: 'Press Reserve: the answer comes back right away, and the email lands a moment later.' }
+    ],
+    sources: [
+      { name: 'allahabadi.dev', title: 'Request-Response: the test that actually works', url: 'https://allahabadi.dev/backend-system-design/patterns/request-response/' },
+      { name: 'ByteByteGo', title: 'Kafka Basics & Message Queue Architecture', url: yt('Bc6oyURRIxQ') }
+    ],
+    facts: [
+      'Ray Tomlinson sent the first network email in 1971 and picked “@” to separate the user from the machine. Email has always been store-and-forward: nobody waits for delivery.',
+      'IBM shipped MQSeries in 1993. Banks used queues like it so a system that went down could catch up later without losing a single transfer.'
+    ],
     quiz: {
-      question: 'What is the "Golden Rule" for deciding if work belongs in an asynchronous queue?',
+      question: 'Which step must stay synchronous inside the booking request?',
       options: [
-        'Queue any task that uses more than 10 lines of JavaScript',
-        'Ask: "If this call fails, should the user\'s action fail?" If no, it should never be synchronous',
-        'Always make every single function call asynchronous including arithmetic',
-        'Only queue database SELECT queries'
+        'Sending the confirmation email',
+        'Rendering the PDF ticket',
+        'Writing the booking row to PostgreSQL',
+        'Recording that Bob pressed Reserve, for analytics'
       ],
-      correctIndex: 1,
+      correctIndex: 2,
       explanation:
-        'If a secondary action like an email or audit log fails, the purchase itself is still valid. Forcing the user to wait synchronously ties their success to unrelated dependencies.',
-      referenceSource: {
-        title: 'allahabadi.dev / Patterns',
-        chapterOrSection: 'When to Walk Away from Request-Response'
-      }
+        'Use the test: if this fails, should the booking fail? Only for the database write: if it fails, Bob has no seat and must be told now. The email, the PDF and the analytics can fail and be retried later without changing whether Bob has a seat, so they go on the queue.',
+      referenceSource: { title: 'allahabadi.dev', chapterOrSection: 'Request-Response: the test that actually works' }
     }
   },
 
-  // LEVEL 8
+  // ─────────────────────────────────────────────── LEVEL 8
   {
-    id: 'level-8-database-sharding',
+    id: 'level-8-sharding-wall',
     levelNumber: 8,
-    title: 'Level 8: The Sharding Wall (Database Partitioning)',
-    subtitle: 'The 200 Million Row Barrier',
+    title: 'The Sharding Wall',
+    subtitle: '210 million rows on one disk',
     inOneLine:
-      'When a single database engine runs out of write IOPS, split the table across independent database shards using a deterministic partition key.',
-    scriptQuote:
-      'Your tickets table reaches 200 million rows. B+ Tree indexes no longer fit in RAM. Every write causes disk thrashing. Read replicas helped read queries, but replicas don’t help writes. You must shard: split the table across multiple physical databases.',
+      'When one database holds too many rows to search quickly, split the rows across several databases and let each row’s key decide which one holds it.',
     storyNarrative:
-      'When table size exceeds single-node storage and memory index capacity, horizontal sharding splits rows across multiple database instances using shard keys. Why does consistent hashing matter here? Naive modulo hashing (key % N) rehashes 80% of all data when adding one new server! Consistent hashing maps servers and keys onto a circular ring, ensuring adding a shard only migrates 1/(N+1) keys without reshuffling the entire system.',
-    historicalContext: 'Vitess (YouTube) and Citus (PostgreSQL) scale relational databases to petabytes via automated vnode sharding.',
-    officialReferences: [
-      {
-        name: 'backendengineer.in',
-        topic: 'Consistent Hashing: Why Adding a Server Shouldn\'t Reshuffle Everything',
-        citation: 'Phase 3 Algorithms in Context — Circular Hash Rings & Vnodes'
-      },
-      {
-        name: 'allahabadi.dev',
-        topic: 'Database Sharding & Partitioning',
-        citation: 'Pattern 09 & 10 — Dividing State Under Scale'
-      }
-    ],
+      'Three tours later the bookings table holds 210 million rows. To find rows by user_id quickly, PostgreSQL keeps an index, a sorted B-tree, and an index is only fast while it fits in RAM. At 210 million rows it doesn’t, so every booking reads index pages from disk and takes about 2.4 seconds. A bigger machine buys time (vertical scaling again, with the same ceiling). Sharding splits the table across three independent PostgreSQL databases, each holding a slice of the rows. The shard key decides where a row lives: shard = user_id % 3. Bob is user 42, and 42 % 3 = 0, so his bookings always live on Shard A. Each shard’s index is a third of the size and fits in RAM again. The cost: a question that isn’t about one user_id (“who booked seat 14C?”) has to be asked of every shard and the answers merged.',
+    introduces: ['index', 'shard', 'shard-key', 'consistent-hashing'],
+    hiddenInfra: ['sessions', 'cache', 'queue', 'pool'],
+    hiddenNote: 'The session store, cache, job queue and PgBouncer are still running, hidden. Each shard has its own PgBouncer.',
     initialNodes: [
-      {
-        id: 'node-browser',
-        type: 'browser',
-        title: 'Client Workstation',
-        position: { x: 50, y: 160 },
-        ports: { inputs: ['in-resp'], outputs: ['out-req'] },
-        data: { activeTab: 'Bob', seatSelected: '14C', price: 85, status: 'idle', lastLatencyMs: 18 }
-      },
-      {
-        id: 'node-server-1',
-        type: 'server',
-        title: 'App Router / Coordinator',
-        position: { x: 420, y: 160 },
-        ports: { inputs: ['in-http'], outputs: ['out-db'] },
-        data: { cpuUsage: 35 }
-      },
-      {
-        id: 'node-db-primary',
-        type: 'database',
-        title: 'Sharded Cluster (3 Partitions)',
-        position: { x: 800, y: 160 },
-        ports: { inputs: ['in-query'], outputs: ['out-data'] },
-        data: { isSharded: true, rowCount: 204000000, activeConnections: 24, maxConnections: 300, queryTimeMs: 8 }
-      }
+      browserNode(),
+      makeNode('node-balancer', 'balancer', 'Load balancer', 440, 170),
+      makeNode('node-fleet', 'server', 'App fleet', 710, 170, { instances: 4 }),
+      makeNode('node-shard-a', 'database', 'Shard A', 980, -20, { shard: 'A', rows: 210_000_000 }),
+      makeNode('node-shard-b', 'database', 'Shard B', 980, 190, { shard: 'B', rows: 0 }),
+      makeNode('node-shard-c', 'database', 'Shard C', 980, 400, { shard: 'C', rows: 0 })
     ],
     initialWires: [
-      {
-        id: 'wire-browser-server',
-        sourceNodeId: 'node-browser',
-        sourcePortId: 'out-req',
-        targetNodeId: 'node-server-1',
-        targetPortId: 'in-http',
-        status: 'active'
-      },
-      {
-        id: 'wire-server-db',
-        sourceNodeId: 'node-server-1',
-        sourcePortId: 'out-db',
-        targetNodeId: 'node-db-primary',
-        targetPortId: 'in-query',
-        status: 'active'
-      }
+      makeWire('node-browser', 'node-balancer'),
+      makeWire('node-balancer', 'node-fleet'),
+      makeWire('node-fleet', 'node-shard-a')
     ],
-    targetObjective:
-      'Execute a ticket purchase across the sharded database cluster. Observe query routing to Partition 2 via hash(user_id) % 3.',
-    requiredConnections: [
-      { fromType: 'server', toType: 'database' }
+    simulatedTrafficRps: 600,
+    trafficControl: true,
+    mechanics: { serverCapacityRps: CAP, sharding: true },
+    goals: [
+      { kind: 'wire', from: 'node-fleet', to: 'node-shard-b', label: 'App fleet → Shard B' },
+      { kind: 'wire', from: 'node-fleet', to: 'node-shard-c', label: 'App fleet → Shard C' },
+      { kind: 'outcome', action: 'buy', status: 200, maxLatencyMs: 200, label: 'Reserve and get 200 OK in under 200 ms' }
     ],
-    simulatedTrafficRps: 500,
+    solution: [
+      { kind: 'wire', from: 'node-fleet', to: 'node-shard-b', text: 'Drag from the fleet’s right dot to Shard B. With two shards each still holds 105 million rows.' },
+      { kind: 'wire', from: 'node-fleet', to: 'node-shard-c', text: 'Drag from the fleet’s right dot to Shard C: 70 million rows each.' },
+      { kind: 'click', action: 'buy', text: 'Press Reserve and watch 42 % 3 pick Shard A.' }
+    ],
+    sources: [
+      { name: 'Gaurav Sen', title: 'What is DATABASE SHARDING?', url: yt('5faMjKuB9bc') },
+      { name: 'ByteByteGo', title: 'Consistent Hashing | Algorithms You Should Know #1', url: yt('UF9Iqmg94tk') }
+    ],
+    facts: [
+      'The B-tree was invented by Rudolf Bayer and Edward McCreight at Boeing’s research labs in 1970. Nobody agrees what the B stands for.',
+      'The word “shard” is often traced to Ultima Online (1997), whose separate game worlds were explained as shards of a shattered gem.',
+      'Consistent hashing was published at MIT in 1997 by David Karger and colleagues, and became the foundation of Akamai.'
+    ],
     quiz: {
-      question: 'What is the major architectural penalty of database sharding?',
+      question: 'You add a 4th shard and change the rule to user_id % 4. What happens to Bob (user 42)?',
       options: [
-        'You can never store strings in the database again',
-        'Cross-shard queries require scatter-gather operations and multi-phase commits (2PC), significantly increasing latency and complexity',
-        'All database queries are automatically converted to UDP',
-        'Sharding requires every user to have a static IP'
+        'Nothing changes for Bob',
+        '42 % 4 = 2, so his bookings are now looked for on Shard C, where they don’t exist until rows are moved',
+        'His bookings are copied to every shard automatically',
+        'PostgreSQL refuses the new rule'
       ],
       correctIndex: 1,
       explanation:
-        'When queries cannot be satisfied by a single shard key, the coordinator must scatter queries to all shards and gather the results, bounded by tail latency.',
-      referenceSource: {
-        title: 'DDIA (Martin Kleppmann)',
-        chapterOrSection: 'Chapter 6: Partitioning and Secondary Indexes'
-      }
+        'Plain modulo ties every row to the number of shards. Change 3 to 4 and most user_ids now map to a different shard, so most rows have to move before anyone can find their bookings. Consistent hashing is the placement rule designed for this: adding one shard moves only about 1/(N+1) of the rows.',
+      referenceSource: { title: 'DDIA (Martin Kleppmann)', chapterOrSection: 'Chapter 6: Partitioning' }
     }
   }
 ];
-
