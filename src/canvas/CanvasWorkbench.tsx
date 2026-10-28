@@ -25,7 +25,8 @@ import {
   ChevronDown,
   ExternalLink,
   Check,
-  Clock
+  Clock,
+  ArrowLeft
 } from 'lucide-react';
 import { CanvasNode, CanvasWire, ClientAction, LevelGoal, NodeType, SolutionStep, WirePacket } from './types';
 import { CANVAS_CURRICULUM } from './data/curriculum';
@@ -546,7 +547,7 @@ export const CanvasWorkbench: React.FC = () => {
       const old = wires.find((w) => w.sourceNodeId === src.id);
       if (old) {
         next = wires.filter((w) => w !== old);
-        note = ` Bob’s computer has one network jack, so the cable came out of ${nodes.find((n) => n.id === old.targetNodeId)?.title}.`;
+        note = ` ${PERSONA.name}’s computer has one network jack, so the cable came out of ${nodes.find((n) => n.id === old.targetNodeId)?.title}.`;
       }
     }
     const wire: CanvasWire = {
@@ -723,7 +724,7 @@ export const CanvasWorkbench: React.FC = () => {
   const sliderMax = Math.max(600, Math.ceil((level.simulatedTrafficRps * 1.5) / 100) * 100);
   const traceRun = run ?? lastRun;
   const dotScale = niceScale(Math.max(0, ...Object.values(flow.link)) / 8);
-  const outcomeLine = !run && lastRun ? `→ Bob sees: ${lastRun.result.status === 0 ? 'no connection' : `${lastRun.result.status} ${lastRun.result.statusText}`}` : undefined;
+  const outcomeLine = !run && lastRun ? `→ ${PERSONA.name} sees: ${lastRun.result.status === 0 ? 'no connection' : `${lastRun.result.status} ${lastRun.result.statusText}`}` : undefined;
   const allSoFar = conceptsUpTo(level.levelNumber);
   const fact = level.facts[0];
 
@@ -740,10 +741,11 @@ export const CanvasWorkbench: React.FC = () => {
       </div>
 
       <header className="wb-nav">
-        <div className="wb-brand">
+        <a className="wb-brand wb-home" href="/" title="All games">
+          <ArrowLeft size={16} />
           <Compass size={18} />
-          <span>Fullstack Odyssey</span>
-        </div>
+          <span>All games</span>
+        </a>
 
         <nav className="wb-levels" aria-label="Levels">
           {CANVAS_CURRICULUM.map((l, i) => (

@@ -797,7 +797,7 @@
   }
 }
 
-/* ── Bob's monitor ───────────────────────────────────────────────────────── */
+/* ── the player's monitor ───────────────────────────────────────────────────────── */
 .bm {
   width: 360px;
   display: flex;
@@ -1922,3 +1922,16 @@
   gap: 3px 10px;
 }
 .nc-value { white-space: nowrap; }
+
+/* back to the landing page: each game page only talks about its own game */
+.wb-home {
+  text-decoration: none;
+  color: var(--c-text-primary);
+}
+.wb-home:hover {
+  color: var(--c-brass);
+}
+.wb-game-title {
+  font: 800 16px/1 var(--c-font-display);
+  text-align: center;
+}

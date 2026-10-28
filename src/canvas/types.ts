@@ -70,7 +70,7 @@ export type ClientAction = 'buy' | 'browse';
 // wiring under these rules — never from the level index.
 export interface LevelMechanics {
   serverCapacityRps: number; // requests/second one server instance can finish
-  sessions?: boolean; // servers must recognise Bob's session cookie
+  sessions?: boolean; // servers must recognise the player's session cookie
   connectionLimit?: boolean; // PostgreSQL refuses past max_connections
   readHeavy?: boolean; // every page view runs the seat-count query
   slowSideEffects?: boolean; // PDF + email happen inside the booking request
