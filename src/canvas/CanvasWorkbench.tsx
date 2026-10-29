@@ -736,16 +736,12 @@ export const CanvasWorkbench: React.FC = () => {
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
     >
-      <div className="wb-banner">
-        Build the backend of a Tatkal booking site, watch it break at 10:00 AM, then fix it. Grounded in <em>allahabadi.dev</em> &amp; <em>backendengineer.in</em>
-      </div>
 
       <header className="wb-nav">
-        <a className="wb-brand wb-home" href="/" title="All games">
-          <ArrowLeft size={16} />
+        <div className="wb-brand">
           <Compass size={18} />
-          <span>All games</span>
-        </a>
+          <span>Fullstack Odyssey</span>
+        </div>
 
         <nav className="wb-levels" aria-label="Levels">
           {CANVAS_CURRICULUM.map((l, i) => (
